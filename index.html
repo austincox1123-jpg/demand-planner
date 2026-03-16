@@ -296,8 +296,10 @@
         </button>
         <div class="hidden mt-3">
           <div class="flex flex-wrap gap-2">
-            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">CUSTOMER_NAME</span>
-            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">PRODUCTNUMBER</span>
+            <span class="text-xs font-mono bg-blue-900/40 text-blue-300 px-2 py-1 rounded border border-blue-800/50">CUSTOMER_NAME *</span>
+            <span class="text-xs font-mono bg-blue-900/40 text-blue-300 px-2 py-1 rounded border border-blue-800/50">PRODUCTNUMBER *</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">YEAR</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">MONTH_NUMBER_OF_YEAR</span>
             <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">END_OF_MONTH_EPOCH</span>
             <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">BRAND</span>
             <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">TYPE</span>
@@ -308,8 +310,9 @@
             <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">ORDER CASES</span>
             <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">FORECAST</span>
             <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">WEEK_NUMBER_OF_MONTH</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">MAX_WKS_PER_MONTH</span>
           </div>
-          <p class="text-xs text-slate-500 mt-2">Column names are matched flexibly (case-insensitive, ignores extra spaces). WEEK_NUMBER_OF_MONTH is recognized for weekly-to-monthly aggregation.</p>
+          <p class="text-xs text-slate-500 mt-2">* Required. Dates: use YEAR + MONTH_NUMBER_OF_YEAR, or END_OF_MONTH_EPOCH, or any date column. Column names are matched flexibly (case-insensitive, underscores/spaces interchangeable).</p>
         </div>
       </div>
 
@@ -838,12 +841,20 @@ function parseSalesData(arrayBuffer) {
     endofmonthepoch:     'date',
     end_of_month:        'date',
     date:                'date',
+    year:                'year',
     month:               'date',
+    month_number_of_year:'monthNumber',
+    monthnumberofyear:   'monthNumber',
+    month_number:        'monthNumber',
+    monthnumber:         'monthNumber',
+    max_wks_per_month:   'maxWeeksPerMonth',
+    maxwkspermonth:      'maxWeeksPerMonth',
     brand:               'brand',
     type:                'type',
     formation:           'formation',
     productname:         'productName',
     product_name:        'productName',
+    prdouctname:         'productName',
     'pos cases':         'pos',
     'pos_cases':         'pos',
     pos:                 'pos',
@@ -884,8 +895,14 @@ function parseSalesData(arrayBuffer) {
     if (stripped && aliases[stripped]) { headerMap[aliases[stripped]] = h; }
   });
 
+  // If no direct date column but YEAR + MONTH_NUMBER_OF_YEAR exist, mark as composite date
+  var useCompositeDate = false;
+  if (!headerMap.date && headerMap.year && headerMap.monthNumber) {
+    useCompositeDate = true;
+  }
+
   // Check required columns
-  var required = ['customer', 'product', 'date'];
+  var required = useCompositeDate ? ['customer', 'product'] : ['customer', 'product', 'date'];
   var missing = required.filter(function (r) { return !headerMap[r]; });
   if (missing.length) {
     return {
@@ -907,8 +924,7 @@ function parseSalesData(arrayBuffer) {
   rows.forEach(function (row, idx) {
     var customer = row[headerMap.customer];
     var product  = row[headerMap.product];
-    var rawDate  = row[headerMap.date];
-    if (customer == null || product == null || rawDate == null) {
+    if (customer == null || product == null) {
       if (idx < 5) warnings.push('Row ' + (idx + 2) + ': missing required field(s).');
       return;
     }
@@ -916,9 +932,24 @@ function parseSalesData(arrayBuffer) {
     product  = String(product).trim();
     if (!customer || !product) return;
 
-    var dm = parseDateValue(rawDate);
+    var dm = null;
+    if (useCompositeDate) {
+      // Build date from YEAR + MONTH_NUMBER_OF_YEAR columns
+      var yr = toNum(row[headerMap.year]);
+      var mn = toNum(row[headerMap.monthNumber]);
+      if (yr != null && mn != null && yr > 1900 && yr < 2100 && mn >= 1 && mn <= 12) {
+        dm = { y: Math.round(yr), m: Math.round(mn) };
+      }
+    } else {
+      var rawDate = row[headerMap.date];
+      if (rawDate == null) {
+        if (idx < 5) warnings.push('Row ' + (idx + 2) + ': missing date.');
+        return;
+      }
+      dm = parseDateValue(rawDate);
+    }
     if (!dm) {
-      if (warnings.length < 20) warnings.push('Row ' + (idx + 2) + ': unparseable date "' + rawDate + '".');
+      if (warnings.length < 20) warnings.push('Row ' + (idx + 2) + ': unparseable date.');
       return;
     }
 
@@ -962,15 +993,14 @@ function parseSalesData(arrayBuffer) {
     if (!sku.type && type)           sku.type = type;
     if (!sku.formation && formation) sku.formation = formation;
 
-    // Check for duplicate months within SKU
+    // Check for duplicate months within SKU (weekly rows get summed into monthly)
     var existing = sku.months.find(function (m) { return m.month === monthStr; });
     if (existing) {
-      // Merge: prefer non-null
-      if (pos !== null)      existing.pos = pos;
-      if (invoice !== null)  existing.invoice = invoice;
-      if (order !== null)    existing.order = order;
-      if (forecast !== null) existing.existingForecast = forecast;
-      if (weekOfMonth !== null) existing.weekOfMonth = weekOfMonth;
+      // Sum weekly values into monthly totals
+      if (pos !== null)      existing.pos = (existing.pos || 0) + pos;
+      if (invoice !== null)  existing.invoice = (existing.invoice || 0) + invoice;
+      if (order !== null)    existing.order = (existing.order || 0) + order;
+      if (forecast !== null) existing.existingForecast = (existing.existingForecast || 0) + forecast;
     } else {
       sku.months.push({
         month: monthStr,
