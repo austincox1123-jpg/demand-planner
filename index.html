@@ -1,0 +1,4291 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demand Planner Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',800:'#1e40af',900:'#1e3a8a' },
+            grade: { a:'#16a34a', b:'#eab308', c:'#f97316', f:'#dc2626' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      margin: 0;
+      min-height: 100vh;
+    }
+
+    /* ---------- Utility ---------- */
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    .view-section { display: none; }
+    .view-section.active { display: block; }
+
+    /* ---------- Scrollbar ---------- */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+    /* ---------- Drag-drop zone ---------- */
+    .drop-zone {
+      border: 2px dashed #475569;
+      border-radius: 16px;
+      transition: all 0.25s ease;
+      background: rgba(30,41,59,0.5);
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #2563eb;
+      background: rgba(37,99,235,0.08);
+      box-shadow: 0 0 0 4px rgba(37,99,235,0.10);
+    }
+
+    /* ---------- Cards ---------- */
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.25rem;
+      transition: box-shadow 0.2s ease;
+    }
+    .card:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.25); }
+    .card-sm { padding: 1rem; border-radius: 10px; }
+
+    /* ---------- Grade badges ---------- */
+    .grade-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 24px; border-radius: 9999px;
+      font-weight: 700; font-size: 0.75rem; letter-spacing: 0.03em;
+    }
+    .grade-A { background: rgba(22,163,74,0.15); color: #22c55e; }
+    .grade-B { background: rgba(234,179,8,0.15); color: #eab308; }
+    .grade-C { background: rgba(249,115,22,0.15); color: #f97316; }
+    .grade-F { background: rgba(220,38,38,0.15); color: #ef4444; }
+
+    /* ---------- Progress bar ---------- */
+    .progress-track {
+      height: 10px; border-radius: 9999px; background: #334155; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 9999px;
+      background: linear-gradient(90deg, #2563eb, #3b82f6);
+      transition: width 0.3s ease;
+      position: relative;
+    }
+    .progress-fill::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+
+    /* ---------- Table ---------- */
+    .results-table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      font-size: 0.875rem;
+    }
+    .results-table thead th {
+      position: sticky; top: 0; z-index: 5;
+      background: #1e293b; color: #94a3b8;
+      font-weight: 600; font-size: 0.75rem; text-transform: uppercase;
+      letter-spacing: 0.05em; padding: 0.75rem 1rem;
+      border-bottom: 1px solid #334155; cursor: pointer;
+      user-select: none; white-space: nowrap;
+    }
+    .results-table thead th:hover { color: #e2e8f0; }
+    .results-table thead th .sort-arrow { margin-left: 4px; opacity: 0.4; font-size: 0.65rem; }
+    .results-table thead th.sort-active .sort-arrow { opacity: 1; color: #3b82f6; }
+    .results-table tbody tr {
+      cursor: pointer; transition: background 0.15s ease;
+    }
+    .results-table tbody tr:hover { background: rgba(37,99,235,0.06); }
+    .results-table tbody td {
+      padding: 0.625rem 1rem; border-bottom: 1px solid #1e293b;
+      white-space: nowrap;
+    }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-weight: 600; font-size: 0.875rem; border-radius: 10px;
+      padding: 0.625rem 1.25rem; border: none; cursor: pointer;
+      transition: all 0.2s ease; text-decoration: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff; box-shadow: 0 2px 8px rgba(37,99,235,0.3);
+    }
+    .btn-primary:hover { box-shadow: 0 4px 16px rgba(37,99,235,0.45); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.45; pointer-events: none; }
+    .btn-secondary {
+      background: #334155; color: #e2e8f0;
+    }
+    .btn-secondary:hover { background: #475569; }
+    .btn-ghost {
+      background: transparent; color: #94a3b8;
+    }
+    .btn-ghost:hover { color: #e2e8f0; background: rgba(255,255,255,0.05); }
+    .btn-sm { padding: 0.375rem 0.875rem; font-size: 0.8125rem; border-radius: 8px; }
+
+    /* ---------- Inputs ---------- */
+    .input-field {
+      background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+      padding: 0.5rem 0.75rem; color: #e2e8f0; font-size: 0.875rem;
+      outline: none; transition: border-color 0.2s;
+    }
+    .input-field:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+
+    select.input-field { appearance: none; padding-right: 2rem;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M1.5 5.5l6.5 6.5 6.5-6.5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 0.75rem center;
+    }
+
+    /* ---------- Slider ---------- */
+    input[type=range] {
+      -webkit-appearance: none; appearance: none;
+      height: 6px; border-radius: 9999px; background: #334155; outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+      background: #2563eb; border: 2px solid #1e293b; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+
+    /* ---------- Checkbox / Radio ---------- */
+    .custom-check {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      cursor: pointer; font-size: 0.875rem; color: #cbd5e1;
+      user-select: none; padding: 0.25rem 0;
+    }
+    .custom-check input[type=checkbox],
+    .custom-check input[type=radio] {
+      width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer;
+    }
+
+    /* ---------- Confidence band legend ---------- */
+    .legend-swatch {
+      display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle;
+    }
+
+    /* ---------- Forecast grid ---------- */
+    .forecast-grid { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+    .forecast-grid th {
+      background: #1e293b; color: #94a3b8; font-weight: 600;
+      padding: 0.5rem 0.75rem; text-align: right;
+      border-bottom: 1px solid #334155; font-size: 0.75rem;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .forecast-grid th:first-child { text-align: left; }
+    .forecast-grid td { padding: 0.4rem 0.75rem; text-align: right; border-bottom: 1px solid rgba(51,65,85,0.5); }
+    .forecast-grid td:first-child { text-align: left; color: #94a3b8; }
+    .forecast-grid tr.future-row { background: rgba(37,99,235,0.04); }
+    .forecast-grid .override-input {
+      width: 80px; background: #0f172a; border: 1px solid #334155;
+      border-radius: 6px; padding: 0.25rem 0.5rem; color: #e2e8f0;
+      font-size: 0.8125rem; text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .forecast-grid .override-input:focus { border-color: #2563eb; outline: none; }
+
+    /* ---------- Trend arrows ---------- */
+    .trend-up { color: #22c55e; }
+    .trend-down { color: #ef4444; }
+    .trend-flat { color: #94a3b8; }
+
+    /* ---------- Outlier dot (chart annotation) ---------- */
+    .outlier-marker { color: #ef4444; }
+
+    /* ---------- Fade-in ---------- */
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .fade-in { animation: fadeIn 0.35s ease forwards; }
+
+    /* ---------- Nav ---------- */
+    .nav-bar {
+      background: rgba(15,23,42,0.85); backdrop-filter: blur(12px);
+      border-bottom: 1px solid #1e293b; position: sticky; top: 0; z-index: 50;
+    }
+  </style>
+</head>
+<body class="h-full">
+
+  <!-- ========== NAVIGATION BAR ========== -->
+  <nav class="nav-bar">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <svg class="w-7 h-7 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 16l4-4 4 4 5-8"/>
+          </svg>
+          <span class="text-lg font-bold text-white tracking-tight">Demand Planner Pro</span>
+        </div>
+        <span id="nav-view-label" class="text-xs font-medium text-slate-500 bg-slate-800 px-2.5 py-0.5 rounded-full ml-2 hidden">Upload</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="nav-btn-upload" onclick="showView('upload')" class="btn btn-ghost btn-sm hidden" title="New Upload">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M4 20h16"/></svg>
+          New Upload
+        </button>
+        <button id="nav-btn-config" onclick="showView('config')" class="btn btn-ghost btn-sm hidden" title="Configuration">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+          Config
+        </button>
+        <button id="nav-btn-results" onclick="showView('results')" class="btn btn-ghost btn-sm hidden" title="Results Dashboard">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/></svg>
+          Results
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ============================================================ -->
+  <!-- VIEW 1: UPLOAD SCREEN                                        -->
+  <!-- ============================================================ -->
+  <section id="view-upload" class="view-section active">
+    <div class="max-w-3xl mx-auto px-4 py-16 fade-in">
+      <!-- Hero -->
+      <div class="text-center mb-10">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600/10 mb-5">
+          <svg class="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 16l4-4 4 4 5-8"/>
+          </svg>
+        </div>
+        <h1 class="text-3xl font-extrabold text-white mb-2">Demand Planner Pro</h1>
+        <p class="text-slate-400 text-base max-w-md mx-auto">Upload your sales data to generate statistical demand forecasts with automatic method selection and accuracy grading.</p>
+      </div>
+
+      <!-- Drop zone -->
+      <div id="drop-zone" class="drop-zone p-10 text-center cursor-pointer mb-6" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept=".xlsx,.csv,.xls" class="hidden" />
+        <div id="drop-zone-default">
+          <svg class="w-12 h-12 text-slate-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M4 20h16"/>
+          </svg>
+          <p class="text-slate-300 font-semibold mb-1">Drop your file here or click to browse</p>
+          <p class="text-slate-500 text-sm">Accepts .xlsx and .csv files</p>
+        </div>
+        <div id="drop-zone-loading" class="hidden">
+          <svg class="w-10 h-10 text-blue-500 mx-auto mb-3 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+          </svg>
+          <p class="text-slate-300 font-medium">Processing file...</p>
+        </div>
+      </div>
+
+      <!-- Expected columns -->
+      <div class="card mb-6">
+        <button onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-180')" class="flex items-center justify-between w-full text-left">
+          <span class="text-sm font-semibold text-slate-300">Expected Columns</span>
+          <svg class="chevron w-4 h-4 text-slate-500 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="hidden mt-3">
+          <div class="flex flex-wrap gap-2">
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">CUSTOMER_NAME</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">PRODUCTNUMBER</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">END_OF_MONTH_EPOCH</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">BRAND</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">TYPE</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">FORMATION</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">PRODUCTNAME</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">POS CASES</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">INVOICE CASES</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">ORDER CASES</span>
+            <span class="text-xs font-mono bg-slate-800 text-slate-400 px-2 py-1 rounded">FORECAST</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">Column names are matched flexibly (case-insensitive, ignores extra spaces).</p>
+        </div>
+      </div>
+
+      <!-- Upload result (hidden until file processed) -->
+      <div id="upload-result" class="hidden fade-in">
+        <div class="card mb-6">
+          <div class="flex items-center gap-2 mb-4">
+            <svg class="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            <span class="text-sm font-semibold text-green-400">File Loaded Successfully</span>
+            <span id="upload-filename" class="text-xs text-slate-500 ml-auto font-mono"></span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <div>
+              <p class="text-xs text-slate-500 mb-0.5">Rows</p>
+              <p id="stat-rows" class="text-xl font-bold text-white tabular-nums">--</p>
+            </div>
+            <div>
+              <p class="text-xs text-slate-500 mb-0.5">Customers</p>
+              <p id="stat-customers" class="text-xl font-bold text-white tabular-nums">--</p>
+            </div>
+            <div>
+              <p class="text-xs text-slate-500 mb-0.5">Products (SKUs)</p>
+              <p id="stat-products" class="text-xl font-bold text-white tabular-nums">--</p>
+            </div>
+            <div>
+              <p class="text-xs text-slate-500 mb-0.5">Date Range</p>
+              <p id="stat-daterange" class="text-sm font-semibold text-white">--</p>
+            </div>
+            <div>
+              <p class="text-xs text-slate-500 mb-0.5">Data Quality</p>
+              <p id="stat-quality" class="text-xl font-bold tabular-nums">--</p>
+            </div>
+          </div>
+        </div>
+        <div class="text-center">
+          <button id="btn-go-config" onclick="showView('config')" class="btn btn-primary text-base px-8 py-3">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+            Configure &amp; Run Forecast
+          </button>
+        </div>
+      </div>
+
+      <!-- Upload error (hidden) -->
+      <div id="upload-error" class="hidden card border-red-800/50 fade-in">
+        <div class="flex items-center gap-2 mb-2">
+          <svg class="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span class="text-sm font-semibold text-red-400">Upload Error</span>
+        </div>
+        <p id="upload-error-msg" class="text-sm text-slate-400"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- VIEW 2: CONFIGURATION SCREEN                                 -->
+  <!-- ============================================================ -->
+  <section id="view-config" class="view-section">
+    <div class="max-w-4xl mx-auto px-4 py-10 fade-in">
+      <h2 class="text-2xl font-bold text-white mb-1">Forecast Configuration</h2>
+      <p class="text-slate-400 text-sm mb-8">Tune parameters before running the batch forecast across all SKUs.</p>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+        <!-- Data source -->
+        <div class="card">
+          <h3 class="text-sm font-semibold text-slate-300 mb-3">Data Source</h3>
+          <select id="cfg-data-source" class="input-field w-full">
+            <option value="pos">POS Cases</option>
+            <option value="invoice">Invoice Cases</option>
+            <option value="order">Order Cases</option>
+            <option value="blended">Blended (Avg of available)</option>
+          </select>
+          <p class="text-xs text-slate-500 mt-2">Choose which demand signal drives the forecast.</p>
+        </div>
+
+        <!-- Forecast horizon -->
+        <div class="card">
+          <h3 class="text-sm font-semibold text-slate-300 mb-3">Forecast Horizon</h3>
+          <div class="flex items-center gap-4">
+            <input type="range" id="cfg-horizon" min="6" max="24" value="18" class="flex-1" oninput="document.getElementById('cfg-horizon-val').textContent=this.value" />
+            <span id="cfg-horizon-val" class="text-xl font-bold text-white tabular-nums w-10 text-right">18</span>
+            <span class="text-xs text-slate-500">months</span>
+          </div>
+        </div>
+
+        <!-- Outlier handling -->
+        <div class="card">
+          <h3 class="text-sm font-semibold text-slate-300 mb-4">Outlier Handling</h3>
+          <div class="space-y-2 mb-4">
+            <label class="custom-check"><input type="radio" name="outlier-mode" value="none" /> None</label>
+            <label class="custom-check"><input type="radio" name="outlier-mode" value="flag" /> Flag Only</label>
+            <label class="custom-check"><input type="radio" name="outlier-mode" value="cap" checked /> Cap at IQR Bounds</label>
+            <label class="custom-check"><input type="radio" name="outlier-mode" value="interpolate" /> Replace with Interpolation</label>
+          </div>
+          <h4 class="text-xs font-semibold text-slate-400 mb-2">Sensitivity (IQR Multiplier)</h4>
+          <div class="flex items-center gap-4">
+            <input type="range" id="cfg-outlier-iqr" min="1.0" max="3.0" step="0.1" value="1.5" class="flex-1" oninput="document.getElementById('cfg-iqr-val').textContent=parseFloat(this.value).toFixed(1)" />
+            <span id="cfg-iqr-val" class="text-lg font-bold text-white tabular-nums w-10 text-right">1.5</span>
+          </div>
+          <div class="flex justify-between text-xs text-slate-600 mt-1 px-0.5">
+            <span>Aggressive</span><span>Conservative</span>
+          </div>
+        </div>
+
+        <!-- Near-term recency -->
+        <div class="card">
+          <h3 class="text-sm font-semibold text-slate-300 mb-3">Near-Term Focus (Recency Weight)</h3>
+          <div class="flex items-center gap-4">
+            <input type="range" id="cfg-recency" min="1.0" max="3.0" step="0.1" value="2.0" class="flex-1" oninput="document.getElementById('cfg-recency-val').textContent=parseFloat(this.value).toFixed(1)" />
+            <span id="cfg-recency-val" class="text-lg font-bold text-white tabular-nums w-10 text-right">2.0</span>
+          </div>
+          <div class="flex justify-between text-xs text-slate-600 mt-1 px-0.5">
+            <span>Equal weight</span><span>Heavy recent bias</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">Higher values weigh recent months more heavily in accuracy scoring.</p>
+        </div>
+
+        <!-- Methods to include -->
+        <div class="card lg:col-span-2">
+          <h3 class="text-sm font-semibold text-slate-300 mb-4">Forecast Methods</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 mb-4">
+            <label class="custom-check"><input type="checkbox" name="method" value="ses" checked /> Simple Exp Smoothing</label>
+            <label class="custom-check"><input type="checkbox" name="method" value="holt" checked /> Holt Linear Trend</label>
+            <label class="custom-check"><input type="checkbox" name="method" value="hw-add" checked /> Holt-Winters Additive</label>
+            <label class="custom-check"><input type="checkbox" name="method" value="hw-mul" checked /> Holt-Winters Multiplicative</label>
+            <label class="custom-check"><input type="checkbox" name="method" value="wma" checked /> Weighted Moving Average</label>
+            <label class="custom-check"><input type="checkbox" name="method" value="croston" checked /> Croston's (Intermittent)</label>
+          </div>
+          <div class="border-t border-slate-700 pt-3 mt-2 space-y-2">
+            <label class="custom-check"><input type="checkbox" id="cfg-auto-select" checked /> <span class="font-medium text-slate-200">Auto-select best method per SKU</span></label>
+            <label class="custom-check"><input type="checkbox" id="cfg-ensemble" /> <span class="font-medium text-slate-200">Use weighted ensemble of top methods</span></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Run button & progress -->
+      <div class="text-center">
+        <button id="btn-run-batch" onclick="handleRunBatch()" class="btn btn-primary text-base px-10 py-3.5 mb-4">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Run Batch Forecast
+        </button>
+        <div id="progress-section" class="hidden max-w-lg mx-auto fade-in">
+          <div class="flex justify-between text-xs text-slate-400 mb-1.5 tabular-nums">
+            <span id="progress-label">Processing SKU 0 of 0...</span>
+            <span id="progress-pct">0%</span>
+          </div>
+          <div class="progress-track">
+            <div id="progress-fill" class="progress-fill" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- VIEW 3: RESULTS DASHBOARD                                    -->
+  <!-- ============================================================ -->
+  <section id="view-results" class="view-section">
+    <div class="max-w-7xl mx-auto px-4 py-8 fade-in">
+      <!-- Summary cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div class="card card-sm">
+          <p class="text-xs text-slate-500 mb-1">Total SKUs</p>
+          <p id="res-total-skus" class="text-2xl font-bold text-white tabular-nums">--</p>
+        </div>
+        <div class="card card-sm">
+          <p class="text-xs text-slate-500 mb-1">Avg WMAPE</p>
+          <p id="res-avg-wmape" class="text-2xl font-bold text-white tabular-nums">--</p>
+        </div>
+        <div class="card card-sm">
+          <p class="text-xs text-slate-500 mb-1">Accuracy Grades</p>
+          <div id="res-grade-dist" class="flex gap-2 mt-1">
+            <span class="grade-badge grade-A" title="A: &lt;15%">--</span>
+            <span class="grade-badge grade-B" title="B: 15-30%">--</span>
+            <span class="grade-badge grade-C" title="C: 30-50%">--</span>
+            <span class="grade-badge grade-F" title="F: &gt;50%">--</span>
+          </div>
+        </div>
+        <div class="card card-sm">
+          <p class="text-xs text-slate-500 mb-1">Outliers Detected</p>
+          <p id="res-outliers" class="text-2xl font-bold text-white tabular-nums">--</p>
+        </div>
+        <div class="card card-sm flex items-center justify-center gap-2">
+          <button onclick="exportAllForecasts()" class="btn btn-secondary btn-sm w-full justify-center">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+            Export All
+          </button>
+          <button onclick="exportAccuracyReport()" class="btn btn-secondary btn-sm w-full justify-center">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Accuracy Rpt
+          </button>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card card-sm mb-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+            <span class="text-xs font-semibold text-slate-400">Filters</span>
+          </div>
+          <select id="filter-customer" class="input-field text-sm py-1.5" onchange="filterResults()">
+            <option value="">All Customers</option>
+          </select>
+          <select id="filter-brand" class="input-field text-sm py-1.5" onchange="filterResults()">
+            <option value="">All Brands</option>
+          </select>
+          <select id="filter-type" class="input-field text-sm py-1.5" onchange="filterResults()">
+            <option value="">All Types</option>
+          </select>
+          <select id="filter-grade" class="input-field text-sm py-1.5" onchange="filterResults()">
+            <option value="">All Grades</option>
+            <option value="A">A (&lt;15%)</option>
+            <option value="B">B (15-30%)</option>
+            <option value="C">C (30-50%)</option>
+            <option value="F">F (&gt;50%)</option>
+          </select>
+          <div class="relative flex-1 min-w-[180px]">
+            <svg class="w-4 h-4 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
+            <input id="filter-search" type="text" class="input-field text-sm py-1.5 w-full pl-8" placeholder="Search product or customer..." oninput="filterResults()" />
+          </div>
+          <span id="filter-count" class="text-xs text-slate-500 tabular-nums ml-auto">-- of -- SKUs</span>
+        </div>
+      </div>
+
+      <!-- Results table -->
+      <div class="card p-0 overflow-hidden mb-6" style="max-height:60vh; overflow-y:auto;">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th onclick="sortResultsTable('customer')">Customer <span class="sort-arrow">&#9650;</span></th>
+              <th onclick="sortResultsTable('product')">Product <span class="sort-arrow">&#9650;</span></th>
+              <th onclick="sortResultsTable('brand')">Brand <span class="sort-arrow">&#9650;</span></th>
+              <th onclick="sortResultsTable('method')">Best Method <span class="sort-arrow">&#9650;</span></th>
+              <th onclick="sortResultsTable('wmape')" class="text-right">WMAPE% <span class="sort-arrow">&#9650;</span></th>
+              <th onclick="sortResultsTable('bias')" class="text-right">Bias% <span class="sort-arrow">&#9650;</span></th>
+              <th onclick="sortResultsTable('grade')">Grade <span class="sort-arrow">&#9650;</span></th>
+              <th>Trend <span class="sort-arrow" style="visibility:hidden">&#9650;</span></th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+        <div id="results-empty" class="hidden text-center py-12">
+          <p class="text-slate-500 text-sm">No SKUs match the current filters.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- VIEW 4: SKU DETAIL VIEW                                      -->
+  <!-- ============================================================ -->
+  <section id="view-sku-detail" class="view-section">
+    <div class="max-w-7xl mx-auto px-4 py-8 fade-in">
+      <!-- Back + header -->
+      <div class="flex items-center gap-3 mb-6">
+        <button onclick="showView('results')" class="btn btn-ghost btn-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          Back to Results
+        </button>
+        <div class="h-5 w-px bg-slate-700"></div>
+        <button onclick="exportSKU()" class="btn btn-secondary btn-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+          Export SKU
+        </button>
+      </div>
+
+      <!-- SKU header card -->
+      <div class="card mb-6">
+        <div class="flex flex-wrap items-start gap-x-8 gap-y-3">
+          <div>
+            <p class="text-xs text-slate-500 mb-0.5">Customer</p>
+            <p id="sku-customer" class="text-lg font-bold text-white">--</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 mb-0.5">Product</p>
+            <p id="sku-product" class="text-base font-semibold text-white">--</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 mb-0.5">Product #</p>
+            <p id="sku-productnumber" class="text-sm font-mono text-slate-300">--</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 mb-0.5">Brand</p>
+            <p id="sku-brand" class="text-sm text-slate-300">--</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 mb-0.5">Type</p>
+            <p id="sku-type" class="text-sm text-slate-300">--</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 mb-0.5">Formation</p>
+            <p id="sku-formation" class="text-sm text-slate-300">--</p>
+          </div>
+          <div class="ml-auto text-right">
+            <p class="text-xs text-slate-500 mb-0.5">Grade</p>
+            <span id="sku-grade-badge" class="grade-badge text-base" style="width:auto;padding:0.25rem 0.75rem;height:auto;">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="card mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-slate-300">Forecast Chart</h3>
+          <div class="flex items-center gap-4 text-xs text-slate-400">
+            <span><span class="legend-swatch" style="background:#3b82f6"></span> Actuals</span>
+            <span><span class="legend-swatch" style="background:#f97316;opacity:0.6"></span> Existing Fcst</span>
+            <span><span class="legend-swatch" style="background:#8b5cf6"></span> Stat Forecast</span>
+            <span><span class="legend-swatch" style="background:rgba(139,92,246,0.15)"></span> Confidence</span>
+            <span><span class="legend-swatch" style="background:#ef4444;border-radius:50%"></span> Outliers</span>
+          </div>
+        </div>
+        <div style="position:relative;height:360px;">
+          <canvas id="sku-chart"></canvas>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Method comparison -->
+        <div class="card lg:col-span-1">
+          <h3 class="text-sm font-semibold text-slate-300 mb-3">Method Comparison</h3>
+          <div id="method-comparison-container" class="overflow-auto" style="max-height:320px;"></div>
+        </div>
+
+        <!-- Forecast grid -->
+        <div class="card lg:col-span-2">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-slate-300">Forecast Data</h3>
+            <button onclick="clearOverrides()" class="btn btn-ghost btn-sm text-xs">Clear All Overrides</button>
+          </div>
+          <div id="forecast-grid-container" class="overflow-auto" style="max-height:420px;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- PLACEHOLDER SLOTS FOR OTHER MODULES                          -->
+  <!-- ============================================================ -->
+  <script>
+/* ============================================================
+   DATA PIPELINE — parse, validate, aggregate, export
+   Pure JS, no imports. Expects global XLSX (SheetJS).
+   ============================================================ */
+
+// ─── Utility helpers ────────────────────────────────────────
+
+/** Return "YYYY-MM-DD" for end-of-month given year/month. */
+function endOfMonth(year, month) {
+  var d = new Date(Date.UTC(year, month, 0)); // day-0 of next month = last day
+  var mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  var dd = String(d.getUTCDate()).padStart(2, '0');
+  return d.getUTCFullYear() + '-' + mm + '-' + dd;
+}
+
+/** Parse a value into a date {y,m} or null. Handles Excel serial numbers, ISO strings, etc. */
+function parseDateValue(raw) {
+  if (raw == null || raw === '') return null;
+
+  // Excel serial number (numeric)
+  if (typeof raw === 'number' || (typeof raw === 'string' && /^\d+(\.\d+)?$/.test(raw.trim()))) {
+    var num = typeof raw === 'number' ? raw : parseFloat(raw.trim());
+    if (num > 1 && num < 200000) {
+      var parsed = XLSX.SSF.parse_date_code(num);
+      if (parsed && parsed.y) return { y: parsed.y, m: parsed.m };
+    }
+  }
+
+  // JS Date object from SheetJS
+  if (raw instanceof Date) {
+    return { y: raw.getFullYear(), m: raw.getMonth() + 1 };
+  }
+
+  // String date: try common formats
+  var s = String(raw).trim();
+  // ISO: 2024-01-31 or 2024-01
+  var isoMatch = s.match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?/);
+  if (isoMatch) return { y: parseInt(isoMatch[1]), m: parseInt(isoMatch[2]) };
+  // US: 01/31/2024 or 1/31/2024
+  var usMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (usMatch) return { y: parseInt(usMatch[3]), m: parseInt(usMatch[1]) };
+
+  return null;
+}
+
+/** Safe numeric parse — returns number or null. */
+function toNum(v) {
+  if (v == null || v === '') return null;
+  var n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[,$]/g, ''));
+  return isFinite(n) ? n : null;
+}
+
+/** "YYYY-MM" from "YYYY-MM-DD". */
+function toYM(dateStr) { return dateStr.slice(0, 7); }
+
+/** Date string "YYYY-MM-DD" to sortable integer YYYYMM. */
+function dateKey(dateStr) {
+  var parts = dateStr.split('-');
+  return parseInt(parts[0]) * 100 + parseInt(parts[1]);
+}
+
+/** Build all end-of-month date strings between two YYYY-MM-DD values (inclusive). */
+function monthRange(startDate, endDate) {
+  var out = [];
+  var sy = parseInt(startDate.slice(0, 4)), sm = parseInt(startDate.slice(5, 7));
+  var ey = parseInt(endDate.slice(0, 4)), em = parseInt(endDate.slice(5, 7));
+  var y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    out.push(endOfMonth(y, m));
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+/** Today formatted YYYYMMDD. */
+function todayStamp() {
+  var d = new Date();
+  return d.getFullYear() +
+    String(d.getMonth() + 1).padStart(2, '0') +
+    String(d.getDate()).padStart(2, '0');
+}
+
+/** Sanitize a string for use in a filename. */
+function safeName(s) {
+  return String(s || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30);
+}
+
+
+// ─── 1. parseSalesData ──────────────────────────────────────
+
+/**
+ * Parse an Excel/CSV ArrayBuffer into an array of SKU objects + metadata.
+ * @param {ArrayBuffer} arrayBuffer
+ * @returns {{ success:boolean, skus:Array, metadata:Object, errors:string[] }}
+ */
+function parseSalesData(arrayBuffer) {
+  var errors = [];
+  var warnings = [];
+
+  // Read workbook
+  var wb;
+  try {
+    wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: false });
+  } catch (e) {
+    return { success: false, skus: [], metadata: {}, errors: ['Failed to read file: ' + e.message] };
+  }
+
+  var sheetName = wb.SheetNames[0];
+  if (!sheetName) return { success: false, skus: [], metadata: {}, errors: ['Workbook contains no sheets.'] };
+
+  var rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: null });
+  if (!rows.length) return { success: false, skus: [], metadata: {}, errors: ['Sheet is empty.'] };
+
+  // ── Column mapping (case-insensitive, flexible) ──
+  var headerMap = {};
+  var aliases = {
+    customer_name:      'customer',
+    customername:        'customer',
+    customer:            'customer',
+    productnumber:       'product',
+    product_number:      'product',
+    product:             'product',
+    end_of_month_epoch:  'date',
+    endofmonthepoch:     'date',
+    end_of_month:        'date',
+    date:                'date',
+    month:               'date',
+    brand:               'brand',
+    type:                'type',
+    formation:           'formation',
+    productname:         'productName',
+    product_name:        'productName',
+    'pos cases':         'pos',
+    'pos_cases':         'pos',
+    pos:                 'pos',
+    'invoice cases':     'invoice',
+    'invoice_cases':     'invoice',
+    invoice:             'invoice',
+    'order cases':       'order',
+    'order_cases':       'order',
+    order:               'order',
+    forecast:            'forecast',
+    existing_forecast:   'forecast',
+    existingforecast:    'forecast'
+  };
+
+  var rawHeaders = Object.keys(rows[0]);
+  rawHeaders.forEach(function (h) {
+    var norm = h.toLowerCase().replace(/[\s_]+/g, ' ').trim();
+    // Try exact match first, then collapse spaces/underscores
+    var key = norm.replace(/ /g, '_');
+    if (aliases[key]) { headerMap[aliases[key]] = h; return; }
+    key = norm.replace(/ /g, '');
+    if (aliases[key]) { headerMap[aliases[key]] = h; return; }
+    // Try with spaces
+    if (aliases[norm]) { headerMap[aliases[norm]] = h; }
+  });
+
+  // Check required columns
+  var required = ['customer', 'product', 'date'];
+  var missing = required.filter(function (r) { return !headerMap[r]; });
+  if (missing.length) {
+    return {
+      success: false, skus: [], metadata: {},
+      errors: ['Missing required column(s): ' + missing.join(', ') +
+               '. Found headers: ' + rawHeaders.join(', ')]
+    };
+  }
+
+  // ── Parse rows ──
+  var skuMap = {};       // key -> SKU object
+  var totalRows = 0;
+  var allCustomers = {};
+  var allProducts = {};
+  var minDate = null, maxDate = null;
+  var hasPOS = false, hasInvoice = false, hasOrder = false;
+  var cellCount = 0, nonNullCells = 0;
+
+  rows.forEach(function (row, idx) {
+    var customer = row[headerMap.customer];
+    var product  = row[headerMap.product];
+    var rawDate  = row[headerMap.date];
+    if (customer == null || product == null || rawDate == null) {
+      if (idx < 5) warnings.push('Row ' + (idx + 2) + ': missing required field(s).');
+      return;
+    }
+    customer = String(customer).trim();
+    product  = String(product).trim();
+    if (!customer || !product) return;
+
+    var dm = parseDateValue(rawDate);
+    if (!dm) {
+      if (warnings.length < 20) warnings.push('Row ' + (idx + 2) + ': unparseable date "' + rawDate + '".');
+      return;
+    }
+
+    var monthStr = endOfMonth(dm.y, dm.m);
+    var pos       = headerMap.pos       ? toNum(row[headerMap.pos])       : null;
+    var invoice   = headerMap.invoice   ? toNum(row[headerMap.invoice])   : null;
+    var order     = headerMap.order     ? toNum(row[headerMap.order])     : null;
+    var forecast  = headerMap.forecast  ? toNum(row[headerMap.forecast])  : null;
+    var brand     = headerMap.brand     ? String(row[headerMap.brand] || '').trim()     : '';
+    var type      = headerMap.type      ? String(row[headerMap.type] || '').trim()      : '';
+    var formation = headerMap.formation ? String(row[headerMap.formation] || '').trim() : '';
+    var prodName  = headerMap.productName ? String(row[headerMap.productName] || '').trim() : '';
+
+    if (pos !== null) hasPOS = true;
+    if (invoice !== null) hasInvoice = true;
+    if (order !== null) hasOrder = true;
+
+    // Track completeness
+    var streams = [pos, invoice, order, forecast];
+    streams.forEach(function (v) { cellCount++; if (v !== null) nonNullCells++; });
+
+    var key = customer + '|' + product;
+    if (!skuMap[key]) {
+      skuMap[key] = {
+        key: key,
+        customer: customer,
+        product: product,
+        productName: prodName,
+        brand: brand,
+        type: type,
+        formation: formation,
+        months: []
+      };
+    }
+
+    var sku = skuMap[key];
+    // Update metadata fields if they were empty
+    if (!sku.productName && prodName) sku.productName = prodName;
+    if (!sku.brand && brand)         sku.brand = brand;
+    if (!sku.type && type)           sku.type = type;
+    if (!sku.formation && formation) sku.formation = formation;
+
+    // Check for duplicate months within SKU
+    var existing = sku.months.find(function (m) { return m.month === monthStr; });
+    if (existing) {
+      // Merge: prefer non-null
+      if (pos !== null)      existing.pos = pos;
+      if (invoice !== null)  existing.invoice = invoice;
+      if (order !== null)    existing.order = order;
+      if (forecast !== null) existing.existingForecast = forecast;
+    } else {
+      sku.months.push({
+        month: monthStr,
+        pos: pos,
+        invoice: invoice,
+        order: order,
+        existingForecast: forecast
+      });
+    }
+
+    allCustomers[customer] = true;
+    allProducts[product] = true;
+    totalRows++;
+
+    var dk = dateKey(monthStr);
+    if (minDate === null || dk < minDate) minDate = dk;
+    if (maxDate === null || dk > maxDate) maxDate = dk;
+  });
+
+  // ── Build SKU array & sort months ──
+  var skus = Object.keys(skuMap).map(function (k) {
+    var sku = skuMap[k];
+    sku.months.sort(function (a, b) { return dateKey(a.month) - dateKey(b.month); });
+    return sku;
+  });
+
+  if (skus.length === 0) {
+    return { success: false, skus: [], metadata: {}, errors: ['No valid data rows found.'] };
+  }
+
+  // ── Data quality score ──
+  var completeness = cellCount > 0 ? (nonNullCells / cellCount) * 100 : 0;
+
+  var skusWithEnoughData = skus.filter(function (s) { return s.months.length > 6; }).length;
+  var consistency = skus.length > 0 ? (skusWithEnoughData / skus.length) * 100 : 0;
+
+  // Gap penalty: % of SKUs with internal gaps
+  var gapPenalty = 0;
+  var skusWithGaps = 0;
+  skus.forEach(function (sku) {
+    if (sku.months.length < 2) return;
+    var expected = monthRange(sku.months[0].month, sku.months[sku.months.length - 1].month);
+    if (expected.length > sku.months.length) skusWithGaps++;
+  });
+  if (skus.length > 0) gapPenalty = (skusWithGaps / skus.length) * 30; // up to 30 pts
+
+  var qualityScore = Math.round(
+    Math.max(0, Math.min(100,
+      completeness * 0.4 + consistency * 0.4 + (100 - gapPenalty) * 0.2
+    ))
+  );
+
+  // ── Assemble metadata ──
+  var minY = Math.floor(minDate / 100), minM = minDate % 100;
+  var maxY = Math.floor(maxDate / 100), maxM = maxDate % 100;
+
+  var metadata = {
+    totalRows: totalRows,
+    totalSKUs: skus.length,
+    customerCount: Object.keys(allCustomers).length,
+    productCount: Object.keys(allProducts).length,
+    dateRange: {
+      start: minY + '-' + String(minM).padStart(2, '0'),
+      end:   maxY + '-' + String(maxM).padStart(2, '0')
+    },
+    dataQualityScore: qualityScore,
+    warnings: warnings,
+    hasPOS: hasPOS,
+    hasInvoice: hasInvoice,
+    hasOrder: hasOrder
+  };
+
+  return { success: true, skus: skus, metadata: metadata, errors: errors };
+}
+
+
+// ─── 2. extractTimeSeries ───────────────────────────────────
+
+/**
+ * Extract a clean, gap-filled, weighted time series from an SKU.
+ * @param {Object} sku
+ * @param {string} source  'pos'|'invoice'|'order'|'blended'
+ * @param {number} recencyWeight  1.0 – 3.0
+ * @returns {{ series: Array, gaps: number, totalMonths: number }}
+ */
+function extractTimeSeries(sku, source, recencyWeight) {
+  if (!sku || !sku.months || sku.months.length === 0) {
+    return { series: [], gaps: 0, totalMonths: 0 };
+  }
+
+  recencyWeight = Math.max(1.0, Math.min(3.0, recencyWeight || 1.0));
+
+  // Determine raw value per month
+  function rawValue(m) {
+    if (source === 'blended') {
+      var vals = [];
+      var weights = [];
+      if (m.pos !== null)     { vals.push(m.pos);     weights.push(0.33); }
+      if (m.invoice !== null) { vals.push(m.invoice); weights.push(0.34); }
+      if (m.order !== null)   { vals.push(m.order);   weights.push(0.33); }
+      if (vals.length === 0) return null;
+      // Renormalize weights
+      var wSum = weights.reduce(function (a, b) { return a + b; }, 0);
+      var result = 0;
+      for (var i = 0; i < vals.length; i++) result += vals[i] * (weights[i] / wSum);
+      return result;
+    }
+    return m[source] !== undefined ? m[source] : null;
+  }
+
+  // Build sparse map month -> value
+  var sparse = {};
+  sku.months.forEach(function (m) { sparse[m.month] = rawValue(m); });
+
+  // Build full month range
+  var firstMonth = sku.months[0].month;
+  var lastMonth  = sku.months[sku.months.length - 1].month;
+  var allMonths  = monthRange(firstMonth, lastMonth);
+  var totalMonths = allMonths.length;
+
+  // Map with nulls for gaps
+  var values = allMonths.map(function (m) { return sparse[m] !== undefined ? sparse[m] : null; });
+
+  // Count gaps (nulls between first and last non-null)
+  var firstNonNull = -1, lastNonNull = -1;
+  for (var i = 0; i < values.length; i++) {
+    if (values[i] !== null) { if (firstNonNull === -1) firstNonNull = i; lastNonNull = i; }
+  }
+  var gaps = 0;
+  if (firstNonNull >= 0) {
+    for (var j = firstNonNull; j <= lastNonNull; j++) {
+      if (values[j] === null) gaps++;
+    }
+  }
+
+  // Linear interpolation for internal gaps
+  if (firstNonNull >= 0) {
+    var prev = firstNonNull;
+    for (var k = firstNonNull + 1; k <= lastNonNull; k++) {
+      if (values[k] !== null) {
+        // Fill between prev and k
+        if (k - prev > 1) {
+          var step = (values[k] - values[prev]) / (k - prev);
+          for (var f = prev + 1; f < k; f++) {
+            values[f] = values[prev] + step * (f - prev);
+          }
+        }
+        prev = k;
+      }
+    }
+  }
+
+  // Build output series with recency weights (only non-null entries)
+  var series = [];
+  var count = 0;
+  for (var n = 0; n < allMonths.length; n++) {
+    if (values[n] !== null) count++;
+  }
+  var idx = 0;
+  for (var p = 0; p < allMonths.length; p++) {
+    if (values[p] === null) continue;
+    // Exponential recency weight: w = exp(alpha * normalizedPosition)
+    var norm = count > 1 ? idx / (count - 1) : 1; // 0..1
+    var alpha = recencyWeight - 1.0; // 0..2
+    var w = Math.exp(alpha * norm);
+    series.push({ month: allMonths[p], value: Math.round(values[p] * 100) / 100, weight: Math.round(w * 1000) / 1000 });
+    idx++;
+  }
+
+  return { series: series, gaps: gaps, totalMonths: totalMonths };
+}
+
+
+// ─── 3. detectDataCharacteristics ───────────────────────────
+
+/**
+ * Analyze a time series (from extractTimeSeries) for auto-method selection.
+ * @param {Array} series  Array of {month, value, weight}
+ * @returns {Object}
+ */
+function detectDataCharacteristics(series) {
+  var defaults = {
+    length: 0, hasSeasonality: false, hasTrend: false, trendDirection: 'flat',
+    isIntermittent: false, demandCV: 0, avgDemandInterval: 0,
+    recentTrend: 'flat', volatility: 0, levelShiftDetected: false
+  };
+
+  if (!series || series.length < 3) {
+    defaults.length = series ? series.length : 0;
+    return defaults;
+  }
+
+  var vals = series.map(function (s) { return s.value; });
+  var n = vals.length;
+
+  // Basic stats
+  var sum = 0;
+  for (var i = 0; i < n; i++) sum += vals[i];
+  var mean = sum / n;
+
+  var ssq = 0;
+  for (var j = 0; j < n; j++) ssq += (vals[j] - mean) * (vals[j] - mean);
+  var stdDev = Math.sqrt(ssq / n);
+
+  var cv = mean !== 0 ? stdDev / Math.abs(mean) : 0;
+  var volatility = mean !== 0 ? stdDev / Math.abs(mean) : 0;
+
+  // Intermittency
+  var zeros = vals.filter(function (v) { return v === 0; }).length;
+  var isIntermittent = zeros / n > 0.3;
+
+  // Average demand interval for intermittent
+  var avgDemandInterval = 0;
+  if (isIntermittent) {
+    var intervals = [];
+    var lastNZ = -1;
+    for (var k = 0; k < n; k++) {
+      if (vals[k] !== 0) {
+        if (lastNZ >= 0) intervals.push(k - lastNZ);
+        lastNZ = k;
+      }
+    }
+    if (intervals.length > 0) {
+      var iSum = 0;
+      for (var q = 0; q < intervals.length; q++) iSum += intervals[q];
+      avgDemandInterval = iSum / intervals.length;
+    }
+  }
+
+  // ── Trend detection via linear regression ──
+  var xMean = (n - 1) / 2;
+  var sxy = 0, sxx = 0;
+  for (var t = 0; t < n; t++) {
+    sxy += (t - xMean) * (vals[t] - mean);
+    sxx += (t - xMean) * (t - xMean);
+  }
+  var slope = sxx !== 0 ? sxy / sxx : 0;
+
+  // t-statistic for slope significance
+  var residSS = 0;
+  for (var r = 0; r < n; r++) {
+    var pred = mean + slope * (r - xMean);
+    residSS += (vals[r] - pred) * (vals[r] - pred);
+  }
+  var slopeStdErr = n > 2 ? Math.sqrt(residSS / (n - 2)) / Math.sqrt(sxx) : Infinity;
+  var tStat = slopeStdErr > 0 ? Math.abs(slope / slopeStdErr) : 0;
+  var hasTrend = tStat > 2.0; // roughly p < 0.05 for moderate n
+  var trendDirection = !hasTrend ? 'flat' : (slope > 0 ? 'up' : 'down');
+
+  // ── Recent trend (last 6 months) ──
+  var recentTrend = 'flat';
+  var tail = vals.slice(-Math.min(6, n));
+  if (tail.length >= 3) {
+    var rn = tail.length;
+    var rxm = (rn - 1) / 2;
+    var rmean = 0;
+    for (var ri = 0; ri < rn; ri++) rmean += tail[ri];
+    rmean /= rn;
+    var rsxy = 0, rsxx = 0;
+    for (var rt = 0; rt < rn; rt++) {
+      rsxy += (rt - rxm) * (tail[rt] - rmean);
+      rsxx += (rt - rxm) * (rt - rxm);
+    }
+    var rSlope = rsxx !== 0 ? rsxy / rsxx : 0;
+    // Relative slope threshold: 2% of mean per period
+    var threshold = Math.abs(rmean) * 0.02;
+    if (rSlope > threshold) recentTrend = 'up';
+    else if (rSlope < -threshold) recentTrend = 'down';
+  }
+
+  // ── Seasonality detection via autocorrelation at lag 12 ──
+  var hasSeasonality = false;
+  if (n >= 24) {
+    var lag = 12;
+    var acNum = 0, acDen = 0;
+    for (var a = 0; a < n; a++) acDen += (vals[a] - mean) * (vals[a] - mean);
+    for (var b = 0; b < n - lag; b++) acNum += (vals[b] - mean) * (vals[b + lag] - mean);
+    var r12 = acDen !== 0 ? acNum / acDen : 0;
+    // Significance threshold: 2 / sqrt(n)
+    hasSeasonality = Math.abs(r12) > 2 / Math.sqrt(n) && Math.abs(r12) > 0.3;
+  }
+
+  // ── Level shift detection ──
+  var levelShiftDetected = false;
+  if (n >= 12) {
+    var half = Math.floor(n / 2);
+    var mean1 = 0, mean2 = 0;
+    for (var l1 = 0; l1 < half; l1++) mean1 += vals[l1];
+    mean1 /= half;
+    for (var l2 = half; l2 < n; l2++) mean2 += vals[l2];
+    mean2 /= (n - half);
+    // Significant if difference > 1 std dev
+    if (stdDev > 0 && Math.abs(mean2 - mean1) > stdDev) levelShiftDetected = true;
+  }
+
+  return {
+    length: n,
+    hasSeasonality: hasSeasonality,
+    hasTrend: hasTrend,
+    trendDirection: trendDirection,
+    isIntermittent: isIntermittent,
+    demandCV: Math.round(cv * 1000) / 1000,
+    avgDemandInterval: Math.round(avgDemandInterval * 100) / 100,
+    recentTrend: recentTrend,
+    volatility: Math.round(volatility * 1000) / 1000,
+    levelShiftDetected: levelShiftDetected
+  };
+}
+
+
+// ─── 4. exportBatchToExcel ──────────────────────────────────
+
+/**
+ * Export batch forecast results to a multi-tab Excel file.
+ * @param {Array} batchResults  Array of per-SKU result objects
+ * @param {Object} config       Forecast configuration used
+ */
+function exportBatchToExcel(batchResults, config) {
+  var wb = XLSX.utils.book_new();
+
+  // ── Tab: Summary ──
+  var summaryRows = batchResults.map(function (r) {
+    return {
+      'SKU Key':     r.key || '',
+      'Customer':    r.customer || '',
+      'Product':     r.product || '',
+      'Brand':       r.brand || '',
+      'Best Method': r.bestMethod || '',
+      'WMAPE':       r.wmape != null ? Math.round(r.wmape * 1000) / 1000 : '',
+      'Bias':        r.bias != null ? Math.round(r.bias * 1000) / 1000 : '',
+      'Grade':       r.grade || ''
+    };
+  });
+  var summaryWS = XLSX.utils.json_to_sheet(summaryRows);
+  XLSX.utils.book_append_sheet(wb, summaryWS, 'Summary');
+
+  // ── Tab: Forecasts ──
+  var forecastRows = [];
+  batchResults.forEach(function (r) {
+    var months = r.forecastMonths || [];
+    months.forEach(function (m) {
+      forecastRows.push({
+        'Customer':  r.customer || '',
+        'Product':   r.product || '',
+        'Month':     m.month || '',
+        'Forecast':  m.forecast != null ? Math.round(m.forecast * 100) / 100 : '',
+        'Lower CI':  m.lowerCI != null ? Math.round(m.lowerCI * 100) / 100 : '',
+        'Upper CI':  m.upperCI != null ? Math.round(m.upperCI * 100) / 100 : '',
+        'Override':  m.override != null ? m.override : '',
+        'Final':     m.final != null ? Math.round(m.final * 100) / 100 : ''
+      });
+    });
+  });
+  var forecastWS = XLSX.utils.json_to_sheet(forecastRows.length ? forecastRows : [{}]);
+  XLSX.utils.book_append_sheet(wb, forecastWS, 'Forecasts');
+
+  // ── Tab: Actuals ──
+  var actualRows = [];
+  batchResults.forEach(function (r) {
+    var hist = r.historicalMonths || [];
+    hist.forEach(function (m) {
+      actualRows.push({
+        'Customer': r.customer || '',
+        'Product':  r.product || '',
+        'Month':    m.month || '',
+        'POS':      m.pos != null ? m.pos : '',
+        'Invoice':  m.invoice != null ? m.invoice : '',
+        'Order':    m.order != null ? m.order : ''
+      });
+    });
+  });
+  var actualsWS = XLSX.utils.json_to_sheet(actualRows.length ? actualRows : [{}]);
+  XLSX.utils.book_append_sheet(wb, actualsWS, 'Actuals');
+
+  // ── Tab: Config ──
+  var configRows = Object.keys(config || {}).map(function (k) {
+    return { 'Setting': k, 'Value': String(config[k]) };
+  });
+  var configWS = XLSX.utils.json_to_sheet(configRows.length ? configRows : [{ Setting: '', Value: '' }]);
+  XLSX.utils.book_append_sheet(wb, configWS, 'Config');
+
+  // Write & trigger download
+  var wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  downloadBlob(wbOut, 'demand_planner_batch_' + todayStamp() + '.xlsx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
+
+// ─── 5. exportAccuracyToExcel ───────────────────────────────
+
+/**
+ * Export accuracy report to multi-tab Excel.
+ * @param {Array} batchResults
+ */
+function exportAccuracyToExcel(batchResults) {
+  var wb = XLSX.utils.book_new();
+
+  // ── Tab: Accuracy by SKU ──
+  var skuRows = batchResults.map(function (r) {
+    return {
+      'Customer':  r.customer || '',
+      'Product':   r.product || '',
+      'Method':    r.bestMethod || '',
+      'WMAPE':     r.wmape != null ? Math.round(r.wmape * 1000) / 1000 : '',
+      'Bias':      r.bias != null ? Math.round(r.bias * 1000) / 1000 : '',
+      'MAE':       r.mae != null ? Math.round(r.mae * 100) / 100 : '',
+      'Grade':     r.grade || ''
+    };
+  });
+  var skuWS = XLSX.utils.json_to_sheet(skuRows.length ? skuRows : [{}]);
+  XLSX.utils.book_append_sheet(wb, skuWS, 'Accuracy by SKU');
+
+  // ── Tab: Accuracy by Method ──
+  var methodMap = {};
+  batchResults.forEach(function (r) {
+    var m = r.bestMethod || 'Unknown';
+    if (!methodMap[m]) methodMap[m] = { totalWMAPE: 0, count: 0 };
+    methodMap[m].totalWMAPE += (r.wmape || 0);
+    methodMap[m].count++;
+  });
+  var methodRows = Object.keys(methodMap).map(function (m) {
+    return {
+      'Method':      m,
+      'Avg WMAPE':   Math.round((methodMap[m].totalWMAPE / methodMap[m].count) * 1000) / 1000,
+      'SKU Count':   methodMap[m].count
+    };
+  });
+  methodRows.sort(function (a, b) { return a['Avg WMAPE'] - b['Avg WMAPE']; });
+  var methodWS = XLSX.utils.json_to_sheet(methodRows.length ? methodRows : [{}]);
+  XLSX.utils.book_append_sheet(wb, methodWS, 'Accuracy by Method');
+
+  // ── Tab: Grade Distribution ──
+  var gradeMap = {};
+  batchResults.forEach(function (r) {
+    var g = r.grade || 'N/A';
+    gradeMap[g] = (gradeMap[g] || 0) + 1;
+  });
+  var total = batchResults.length || 1;
+  var gradeRows = Object.keys(gradeMap).sort().map(function (g) {
+    return {
+      'Grade':      g,
+      'Count':      gradeMap[g],
+      'Percentage': Math.round((gradeMap[g] / total) * 1000) / 10 + '%'
+    };
+  });
+  var gradeWS = XLSX.utils.json_to_sheet(gradeRows.length ? gradeRows : [{}]);
+  XLSX.utils.book_append_sheet(wb, gradeWS, 'Grade Distribution');
+
+  var wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  downloadBlob(wbOut, 'accuracy_report_' + todayStamp() + '.xlsx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
+
+// ─── 6. exportSKUToExcel ────────────────────────────────────
+
+/**
+ * Export a single SKU's detailed forecast to Excel.
+ * @param {Object} skuResult  Combined result with forecast, actuals, method comparison, outliers
+ */
+function exportSKUToExcel(skuResult) {
+  var wb = XLSX.utils.book_new();
+  var r = skuResult;
+
+  // ── Tab: Forecast ──
+  var fcstRows = (r.allMonths || []).map(function (m) {
+    return {
+      'Month':           m.month || '',
+      'Actual':          m.actual != null ? Math.round(m.actual * 100) / 100 : '',
+      'Existing Fcst':   m.existingForecast != null ? Math.round(m.existingForecast * 100) / 100 : '',
+      'Stat Forecast':   m.forecast != null ? Math.round(m.forecast * 100) / 100 : '',
+      'Lower CI':        m.lowerCI != null ? Math.round(m.lowerCI * 100) / 100 : '',
+      'Upper CI':        m.upperCI != null ? Math.round(m.upperCI * 100) / 100 : '',
+      'Override':        m.override != null ? m.override : '',
+      'Final':           m.final != null ? Math.round(m.final * 100) / 100 : ''
+    };
+  });
+  var fcstWS = XLSX.utils.json_to_sheet(fcstRows.length ? fcstRows : [{}]);
+  XLSX.utils.book_append_sheet(wb, fcstWS, 'Forecast');
+
+  // ── Tab: Method Comparison ──
+  var methRows = (r.methodComparison || []).map(function (m) {
+    return {
+      'Method': m.method || '',
+      'WMAPE':  m.wmape != null ? Math.round(m.wmape * 1000) / 1000 : '',
+      'Bias':   m.bias != null ? Math.round(m.bias * 1000) / 1000 : '',
+      'MAE':    m.mae != null ? Math.round(m.mae * 100) / 100 : ''
+    };
+  });
+  var methWS = XLSX.utils.json_to_sheet(methRows.length ? methRows : [{}]);
+  XLSX.utils.book_append_sheet(wb, methWS, 'Method Comparison');
+
+  // ── Tab: Outliers ──
+  var outRows = (r.outliers || []).map(function (o) {
+    return {
+      'Month':          o.month || '',
+      'Original Value': o.original != null ? Math.round(o.original * 100) / 100 : '',
+      'Cleaned Value':  o.cleaned != null ? Math.round(o.cleaned * 100) / 100 : '',
+      'Reason':         o.reason || ''
+    };
+  });
+  var outWS = XLSX.utils.json_to_sheet(outRows.length ? outRows : [{}]);
+  XLSX.utils.book_append_sheet(wb, outWS, 'Outliers');
+
+  var customer = safeName(r.customer);
+  var product  = safeName(r.product);
+  var wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  downloadBlob(wbOut, 'forecast_' + customer + '_' + product + '.xlsx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
+
+// ─── Shared download helper ─────────────────────────────────
+
+/** Trigger browser download from an ArrayBuffer. */
+function downloadBlob(arrayBuffer, filename, mime) {
+  var blob = new Blob([arrayBuffer], { type: mime });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+}
+
+  </script>
+  <script>
+// ============================================================
+// forecast-core.js — Core Statistical Forecasting Methods
+// Pure JS, no imports. Designed to be inlined into HTML.
+// ============================================================
+
+// --- Helper Functions ---
+
+function generateFutureMonths(lastMonth, horizon) {
+  // lastMonth: "YYYY-MM-DD" end-of-month string
+  var parts = lastMonth.split('-');
+  var year = parseInt(parts[0], 10);
+  var month = parseInt(parts[1], 10); // 1-based
+  var results = [];
+  for (var i = 0; i < horizon; i++) {
+    month++;
+    if (month > 12) { month = 1; year++; }
+    // Last day of month: day 0 of next month
+    var lastDay = new Date(year, month, 0).getDate();
+    var mm = month < 10 ? '0' + month : '' + month;
+    var dd = lastDay < 10 ? '0' + lastDay : '' + lastDay;
+    results.push(year + '-' + mm + '-' + dd);
+  }
+  return results;
+}
+
+function calcWeightedMSE(actuals, fitted, weights) {
+  var sumWE = 0, sumW = 0;
+  for (var i = 0; i < actuals.length; i++) {
+    var w = (weights && weights[i] != null) ? weights[i] : 1;
+    var e = actuals[i] - fitted[i];
+    sumWE += w * e * e;
+    sumW += w;
+  }
+  return sumW > 0 ? sumWE / sumW : Infinity;
+}
+
+function optimizeParam(fn, min, max, step) {
+  var bestVal = min, bestMSE = Infinity;
+  for (var v = min; v <= max + 1e-9; v += step) {
+    var mse = fn(v);
+    if (mse < bestMSE) { bestMSE = mse; bestVal = v; }
+  }
+  return bestVal;
+}
+
+function roundTo2(v) {
+  return Math.round(v * 100) / 100;
+}
+
+function clampNonNeg(v) {
+  return v < 0 ? 0 : v;
+}
+
+function endOfMonth(year, month) {
+  // month is 1-based
+  var lastDay = new Date(year, month, 0).getDate();
+  var mm = month < 10 ? '0' + month : '' + month;
+  var dd = lastDay < 10 ? '0' + lastDay : '' + lastDay;
+  return year + '-' + mm + '-' + dd;
+}
+
+// --- Seasonal helpers ---
+
+function computeSeasonalIndicesAdditive(values) {
+  // Ratio-to-centered-moving-average, additive
+  var n = values.length;
+  var period = 12;
+  // Centered 12-month MA (2x12 MA for even period)
+  var cma = new Array(n);
+  for (var i = 0; i < n; i++) cma[i] = null;
+  for (var i = 6; i < n - 5; i++) {
+    var sum = 0;
+    for (var j = i - 6; j <= i + 5; j++) sum += values[j];
+    // 2x12: average of this and shifted by 1
+    var sum2 = 0;
+    for (var j = i - 5; j <= i + 6; j++) {
+      if (j >= n) { sum2 = null; break; }
+      sum2 += values[j];
+    }
+    if (sum2 === null) continue;
+    cma[i] = (sum / 12 + sum2 / 12) / 2;
+  }
+  // Deviations by season
+  var seasonSums = new Array(12);
+  var seasonCounts = new Array(12);
+  for (var s = 0; s < 12; s++) { seasonSums[s] = 0; seasonCounts[s] = 0; }
+  for (var i = 0; i < n; i++) {
+    if (cma[i] !== null) {
+      var s = i % 12;
+      seasonSums[s] += values[i] - cma[i];
+      seasonCounts[s]++;
+    }
+  }
+  var indices = new Array(12);
+  for (var s = 0; s < 12; s++) {
+    indices[s] = seasonCounts[s] > 0 ? seasonSums[s] / seasonCounts[s] : 0;
+  }
+  // Normalize so they sum to 0
+  var mean = 0;
+  for (var s = 0; s < 12; s++) mean += indices[s];
+  mean /= 12;
+  for (var s = 0; s < 12; s++) indices[s] -= mean;
+  return indices;
+}
+
+function computeSeasonalIndicesMultiplicative(values) {
+  var n = values.length;
+  var cma = new Array(n);
+  for (var i = 0; i < n; i++) cma[i] = null;
+  for (var i = 6; i < n - 5; i++) {
+    var sum = 0;
+    for (var j = i - 6; j <= i + 5; j++) sum += values[j];
+    var sum2 = 0;
+    for (var j = i - 5; j <= i + 6; j++) {
+      if (j >= n) { sum2 = null; break; }
+      sum2 += values[j];
+    }
+    if (sum2 === null) continue;
+    cma[i] = (sum / 12 + sum2 / 12) / 2;
+  }
+  var seasonSums = new Array(12);
+  var seasonCounts = new Array(12);
+  for (var s = 0; s < 12; s++) { seasonSums[s] = 0; seasonCounts[s] = 0; }
+  for (var i = 0; i < n; i++) {
+    if (cma[i] !== null && cma[i] !== 0) {
+      var s = i % 12;
+      seasonSums[s] += values[i] / cma[i];
+      seasonCounts[s]++;
+    }
+  }
+  var indices = new Array(12);
+  for (var s = 0; s < 12; s++) {
+    indices[s] = seasonCounts[s] > 0 ? seasonSums[s] / seasonCounts[s] : 1;
+  }
+  // Normalize so they average to 1
+  var mean = 0;
+  for (var s = 0; s < 12; s++) mean += indices[s];
+  mean /= 12;
+  if (mean !== 0) {
+    for (var s = 0; s < 12; s++) indices[s] /= mean;
+  }
+  return indices;
+}
+
+
+// ============================================================
+// 1. Simple Exponential Smoothing
+// ============================================================
+
+function forecastSES(series, params) {
+  if (!series || series.length < 1) return null;
+  params = params || {};
+  var horizon = params.horizon || 18;
+  var n = series.length;
+  var values = [];
+  var weights = [];
+  for (var i = 0; i < n; i++) {
+    values.push(series[i].value);
+    weights.push(series[i].weight != null ? series[i].weight : 1);
+  }
+
+  // Initial level: mean of first min(3, n) values
+  var initCount = Math.min(3, n);
+  var initLevel = 0;
+  for (var i = 0; i < initCount; i++) initLevel += values[i];
+  initLevel /= initCount;
+
+  function sesFitted(alpha) {
+    var level = initLevel;
+    var fit = new Array(n);
+    fit[0] = level;
+    for (var i = 1; i < n; i++) {
+      level = alpha * values[i - 1] + (1 - alpha) * level;
+      fit[i] = level;
+    }
+    return fit;
+  }
+
+  function sesMSE(alpha) {
+    var fit = sesFitted(alpha);
+    return calcWeightedMSE(values, fit, weights);
+  }
+
+  // Coarse then fine grid search
+  var bestAlpha = optimizeParam(sesMSE, 0.01, 0.99, 0.05);
+  bestAlpha = optimizeParam(sesMSE, Math.max(0.01, bestAlpha - 0.05), Math.min(0.99, bestAlpha + 0.05), 0.01);
+
+  // Final pass
+  var fitted = sesFitted(bestAlpha);
+  var finalLevel = bestAlpha * values[n - 1] + (1 - bestAlpha) * fitted[n - 1];
+
+  // Build output
+  var fittedOut = [];
+  var residuals = [];
+  for (var i = 0; i < n; i++) {
+    fittedOut.push({ month: series[i].month, actual: values[i], fitted: roundTo2(fitted[i]) });
+    residuals.push(roundTo2(values[i] - fitted[i]));
+  }
+
+  var futureMonths = generateFutureMonths(series[n - 1].month, horizon);
+  var forecasts = [];
+  for (var i = 0; i < horizon; i++) {
+    var fv = roundTo2(clampNonNeg(finalLevel));
+    forecasts.push({ month: futureMonths[i], value: fv, fitted: fv });
+  }
+
+  return {
+    method: 'ses',
+    forecasts: forecasts,
+    fitted: fittedOut,
+    residuals: residuals,
+    params: { alpha: roundTo2(bestAlpha) }
+  };
+}
+
+
+// ============================================================
+// 2. Holt's Linear Trend (Double Exponential Smoothing)
+// ============================================================
+
+function forecastHolt(series, params) {
+  if (!series || series.length < 3) return null;
+  params = params || {};
+  var horizon = params.horizon || 18;
+  var n = series.length;
+  var values = [];
+  var weights = [];
+  for (var i = 0; i < n; i++) {
+    values.push(series[i].value);
+    weights.push(series[i].weight != null ? series[i].weight : 1);
+  }
+
+  // Initialize: level = first value, trend = avg of first 3 diffs
+  var initLevel = values[0];
+  var initTrend = 0;
+  var diffCount = Math.min(3, n - 1);
+  if (diffCount > 0) {
+    for (var i = 0; i < diffCount; i++) initTrend += values[i + 1] - values[i];
+    initTrend /= diffCount;
+  }
+
+  // Damped trend if >24 months
+  var useDamping = n > 24;
+  var phi = 0.9;
+
+  function holtFitted(alpha, beta) {
+    var level = initLevel;
+    var trend = initTrend;
+    var fit = new Array(n);
+    fit[0] = level + trend;
+    for (var i = 1; i < n; i++) {
+      var prevLevel = level;
+      level = alpha * values[i] + (1 - alpha) * (level + (useDamping ? phi * trend : trend));
+      trend = beta * (level - prevLevel) + (1 - beta) * (useDamping ? phi * trend : trend);
+      if (i < n - 1) {
+        fit[i] = level + (useDamping ? phi * trend : trend);
+      } else {
+        fit[i] = level + (useDamping ? phi * trend : trend);
+      }
+    }
+    return { fit: fit, level: level, trend: trend };
+  }
+
+  function holtMSE(alpha, beta) {
+    var res = holtFitted(alpha, beta);
+    return calcWeightedMSE(values, res.fit, weights);
+  }
+
+  // Coarse grid search
+  var bestAlpha = 0.1, bestBeta = 0.05, bestMSE = Infinity;
+  for (var a = 0.05; a <= 0.99; a += 0.05) {
+    for (var b = 0.025; b <= 0.5; b += 0.025) {
+      var mse = holtMSE(a, b);
+      if (mse < bestMSE) { bestMSE = mse; bestAlpha = a; bestBeta = b; }
+    }
+  }
+  // Refine
+  var refA = bestAlpha, refB = bestBeta;
+  bestMSE = Infinity;
+  for (var a = Math.max(0.01, refA - 0.05); a <= Math.min(0.99, refA + 0.05); a += 0.01) {
+    for (var b = Math.max(0.01, refB - 0.025); b <= Math.min(0.5, refB + 0.025); b += 0.005) {
+      var mse = holtMSE(a, b);
+      if (mse < bestMSE) { bestMSE = mse; bestAlpha = a; bestBeta = b; }
+    }
+  }
+
+  var result = holtFitted(bestAlpha, bestBeta);
+  var finalLevel = result.level;
+  var finalTrend = result.trend;
+
+  var fittedOut = [];
+  var residuals = [];
+  for (var i = 0; i < n; i++) {
+    fittedOut.push({ month: series[i].month, actual: values[i], fitted: roundTo2(result.fit[i]) });
+    residuals.push(roundTo2(values[i] - result.fit[i]));
+  }
+
+  var futureMonths = generateFutureMonths(series[n - 1].month, horizon);
+  var forecasts = [];
+  var cumPhi = 0;
+  for (var h = 1; h <= horizon; h++) {
+    var fv;
+    if (useDamping) {
+      cumPhi += Math.pow(phi, h);
+      fv = finalLevel + cumPhi * finalTrend;
+    } else {
+      fv = finalLevel + h * finalTrend;
+    }
+    fv = roundTo2(clampNonNeg(fv));
+    forecasts.push({ month: futureMonths[h - 1], value: fv, fitted: fv });
+  }
+
+  return {
+    method: 'holt',
+    forecasts: forecasts,
+    fitted: fittedOut,
+    residuals: residuals,
+    params: { alpha: roundTo2(bestAlpha), beta: roundTo2(bestBeta), damped: useDamping, phi: useDamping ? phi : null }
+  };
+}
+
+
+// ============================================================
+// 3. Holt-Winters Additive Seasonality
+// ============================================================
+
+function forecastHoltWintersAdditive(series, params) {
+  if (!series || series.length < 24) return null;
+  params = params || {};
+  var horizon = params.horizon || 18;
+  var n = series.length;
+  var m = 12; // season length
+  var values = [];
+  var weights = [];
+  for (var i = 0; i < n; i++) {
+    values.push(series[i].value);
+    weights.push(series[i].weight != null ? series[i].weight : 1);
+  }
+
+  // Initialize
+  var initLevel = 0;
+  for (var i = 0; i < m; i++) initLevel += values[i];
+  initLevel /= m;
+
+  var initTrend = 0;
+  if (n >= 24) {
+    var avgSecond = 0;
+    for (var i = m; i < 2 * m; i++) avgSecond += values[i];
+    avgSecond /= m;
+    initTrend = (avgSecond - initLevel) / m;
+  }
+
+  var initSeasonal = new Array(m);
+  for (var i = 0; i < m; i++) initSeasonal[i] = values[i] - initLevel;
+
+  var phi = 0.9; // damping factor
+
+  function hwAddFitted(alpha, beta, gamma) {
+    var level = initLevel;
+    var trend = initTrend;
+    var seasonal = initSeasonal.slice();
+    var fit = new Array(n);
+
+    for (var i = 0; i < n; i++) {
+      var si = i % m;
+      var prevSeasonal = seasonal[si];
+      var yhat = level + phi * trend + prevSeasonal;
+      fit[i] = yhat;
+
+      var prevLevel = level;
+      level = alpha * (values[i] - prevSeasonal) + (1 - alpha) * (level + phi * trend);
+      trend = beta * (level - prevLevel) + (1 - beta) * phi * trend;
+      seasonal[si] = gamma * (values[i] - level) + (1 - gamma) * prevSeasonal;
+    }
+    return { fit: fit, level: level, trend: trend, seasonal: seasonal };
+  }
+
+  function hwAddMSE(alpha, beta, gamma) {
+    var res = hwAddFitted(alpha, beta, gamma);
+    return calcWeightedMSE(values, res.fit, weights);
+  }
+
+  // Coarse grid
+  var bestAlpha = 0.1, bestBeta = 0.05, bestGamma = 0.1, bestMSE = Infinity;
+  for (var a = 0.1; a <= 0.9; a += 0.1) {
+    for (var b = 0.01; b <= 0.3; b += 0.05) {
+      for (var g = 0.1; g <= 0.9; g += 0.1) {
+        var mse = hwAddMSE(a, b, g);
+        if (mse < bestMSE) { bestMSE = mse; bestAlpha = a; bestBeta = b; bestGamma = g; }
+      }
+    }
+  }
+  // Refine around best
+  var rA = bestAlpha, rB = bestBeta, rG = bestGamma;
+  bestMSE = Infinity;
+  for (var a = Math.max(0.01, rA - 0.1); a <= Math.min(0.99, rA + 0.1); a += 0.02) {
+    for (var b = Math.max(0.01, rB - 0.05); b <= Math.min(0.5, rB + 0.05); b += 0.01) {
+      for (var g = Math.max(0.01, rG - 0.1); g <= Math.min(0.99, rG + 0.1); g += 0.02) {
+        var mse = hwAddMSE(a, b, g);
+        if (mse < bestMSE) { bestMSE = mse; bestAlpha = a; bestBeta = b; bestGamma = g; }
+      }
+    }
+  }
+
+  var result = hwAddFitted(bestAlpha, bestBeta, bestGamma);
+
+  var fittedOut = [];
+  var residuals = [];
+  for (var i = 0; i < n; i++) {
+    fittedOut.push({ month: series[i].month, actual: values[i], fitted: roundTo2(result.fit[i]) });
+    residuals.push(roundTo2(values[i] - result.fit[i]));
+  }
+
+  var futureMonths = generateFutureMonths(series[n - 1].month, horizon);
+  var forecasts = [];
+  var cumPhi = 0;
+  for (var h = 1; h <= horizon; h++) {
+    // Damped trend for h > 6
+    cumPhi += (h <= 6) ? 1 : Math.pow(phi, h - 6);
+    var trendComponent = (h <= 6) ? h * result.trend : (6 * result.trend + (cumPhi - 6) * result.trend);
+    // Simpler: accumulate damped trend from the start for consistency
+    var fv;
+    if (h <= 6) {
+      fv = result.level + h * result.trend + result.seasonal[(n + h - 1) % m];
+    } else {
+      // Damped from step 7 onward
+      var dampedTrend = 6 * result.trend;
+      for (var k = 7; k <= h; k++) {
+        dampedTrend += Math.pow(phi, k - 6) * result.trend;
+      }
+      fv = result.level + dampedTrend + result.seasonal[(n + h - 1) % m];
+    }
+    fv = roundTo2(clampNonNeg(fv));
+    forecasts.push({ month: futureMonths[h - 1], value: fv, fitted: fv });
+  }
+
+  return {
+    method: 'holt_winters_additive',
+    forecasts: forecasts,
+    fitted: fittedOut,
+    residuals: residuals,
+    params: { alpha: roundTo2(bestAlpha), beta: roundTo2(bestBeta), gamma: roundTo2(bestGamma), damped: true, phi: phi }
+  };
+}
+
+
+// ============================================================
+// 4. Holt-Winters Multiplicative Seasonality
+// ============================================================
+
+function forecastHoltWintersMultiplicative(series, params) {
+  if (!series || series.length < 24) return null;
+  params = params || {};
+  var horizon = params.horizon || 18;
+  var n = series.length;
+  var m = 12;
+  var values = [];
+  var weights = [];
+  for (var i = 0; i < n; i++) {
+    if (series[i].value <= 0) return null; // Multiplicative requires all positive
+    values.push(series[i].value);
+    weights.push(series[i].weight != null ? series[i].weight : 1);
+  }
+
+  // Initialize
+  var initLevel = 0;
+  for (var i = 0; i < m; i++) initLevel += values[i];
+  initLevel /= m;
+
+  var initTrend = 0;
+  if (n >= 24) {
+    var avgSecond = 0;
+    for (var i = m; i < 2 * m; i++) avgSecond += values[i];
+    avgSecond /= m;
+    initTrend = (avgSecond - initLevel) / m;
+  }
+
+  var initSeasonal = new Array(m);
+  for (var i = 0; i < m; i++) {
+    initSeasonal[i] = initLevel !== 0 ? values[i] / initLevel : 1;
+  }
+
+  var phi = 0.9;
+
+  function hwMulFitted(alpha, beta, gamma) {
+    var level = initLevel;
+    var trend = initTrend;
+    var seasonal = initSeasonal.slice();
+    var fit = new Array(n);
+
+    for (var i = 0; i < n; i++) {
+      var si = i % m;
+      var prevSeasonal = seasonal[si];
+      var yhat = (level + phi * trend) * prevSeasonal;
+      fit[i] = yhat;
+
+      var prevLevel = level;
+      level = alpha * (values[i] / (prevSeasonal || 1)) + (1 - alpha) * (level + phi * trend);
+      trend = beta * (level - prevLevel) + (1 - beta) * phi * trend;
+      seasonal[si] = gamma * (values[i] / (level || 1)) + (1 - gamma) * prevSeasonal;
+    }
+    return { fit: fit, level: level, trend: trend, seasonal: seasonal };
+  }
+
+  function hwMulMSE(alpha, beta, gamma) {
+    var res = hwMulFitted(alpha, beta, gamma);
+    return calcWeightedMSE(values, res.fit, weights);
+  }
+
+  // Coarse grid
+  var bestAlpha = 0.1, bestBeta = 0.05, bestGamma = 0.1, bestMSE = Infinity;
+  for (var a = 0.1; a <= 0.9; a += 0.1) {
+    for (var b = 0.01; b <= 0.3; b += 0.05) {
+      for (var g = 0.1; g <= 0.9; g += 0.1) {
+        var mse = hwMulMSE(a, b, g);
+        if (mse < bestMSE) { bestMSE = mse; bestAlpha = a; bestBeta = b; bestGamma = g; }
+      }
+    }
+  }
+  // Refine
+  var rA = bestAlpha, rB = bestBeta, rG = bestGamma;
+  bestMSE = Infinity;
+  for (var a = Math.max(0.01, rA - 0.1); a <= Math.min(0.99, rA + 0.1); a += 0.02) {
+    for (var b = Math.max(0.01, rB - 0.05); b <= Math.min(0.5, rB + 0.05); b += 0.01) {
+      for (var g = Math.max(0.01, rG - 0.1); g <= Math.min(0.99, rG + 0.1); g += 0.02) {
+        var mse = hwMulMSE(a, b, g);
+        if (mse < bestMSE) { bestMSE = mse; bestAlpha = a; bestBeta = b; bestGamma = g; }
+      }
+    }
+  }
+
+  var result = hwMulFitted(bestAlpha, bestBeta, bestGamma);
+
+  var fittedOut = [];
+  var residuals = [];
+  for (var i = 0; i < n; i++) {
+    fittedOut.push({ month: series[i].month, actual: values[i], fitted: roundTo2(result.fit[i]) });
+    residuals.push(roundTo2(values[i] - result.fit[i]));
+  }
+
+  var futureMonths = generateFutureMonths(series[n - 1].month, horizon);
+  var forecasts = [];
+  for (var h = 1; h <= horizon; h++) {
+    var fv;
+    if (h <= 6) {
+      fv = (result.level + h * result.trend) * result.seasonal[(n + h - 1) % m];
+    } else {
+      var dampedTrend = 6 * result.trend;
+      for (var k = 7; k <= h; k++) {
+        dampedTrend += Math.pow(phi, k - 6) * result.trend;
+      }
+      fv = (result.level + dampedTrend) * result.seasonal[(n + h - 1) % m];
+    }
+    fv = roundTo2(clampNonNeg(fv));
+    forecasts.push({ month: futureMonths[h - 1], value: fv, fitted: fv });
+  }
+
+  return {
+    method: 'holt_winters_multiplicative',
+    forecasts: forecasts,
+    fitted: fittedOut,
+    residuals: residuals,
+    params: { alpha: roundTo2(bestAlpha), beta: roundTo2(bestBeta), gamma: roundTo2(bestGamma), damped: true, phi: phi }
+  };
+}
+
+
+// ============================================================
+// 5. Weighted Moving Average
+// ============================================================
+
+function forecastWMA(series, params) {
+  if (!series || series.length < 1) return null;
+  params = params || {};
+  var horizon = params.horizon || 18;
+  var window = params.window || 6;
+  var n = series.length;
+  var values = [];
+  var seriesWeights = [];
+  for (var i = 0; i < n; i++) {
+    values.push(series[i].value);
+    seriesWeights.push(series[i].weight != null ? series[i].weight : 1);
+  }
+
+  var effectiveWindow = Math.min(window, n);
+
+  // Build linear decay weights for the window, normalized
+  function buildWMAWeights(winSize) {
+    var w = [];
+    for (var i = 0; i < winSize; i++) w.push(i + 1); // 1,2,...,winSize (most recent = highest)
+    var sum = 0;
+    for (var i = 0; i < winSize; i++) sum += w[i];
+    for (var i = 0; i < winSize; i++) w[i] /= sum;
+    return w;
+  }
+
+  // Compute fitted values using WMA
+  var fitted = new Array(n);
+  for (var i = 0; i < n; i++) {
+    if (i === 0) {
+      fitted[i] = values[i];
+      continue;
+    }
+    var winSize = Math.min(effectiveWindow, i);
+    var wmaW = buildWMAWeights(winSize);
+    var sumVal = 0, sumW = 0;
+    for (var j = 0; j < winSize; j++) {
+      var idx = i - winSize + j;
+      var combinedW = wmaW[j] * seriesWeights[idx];
+      sumVal += combinedW * values[idx];
+      sumW += combinedW;
+    }
+    fitted[i] = sumW > 0 ? sumVal / sumW : values[i];
+  }
+
+  // Seasonal adjustment
+  var useSeasonality = params.seasonality && n >= 24;
+  var seasonalIndices = null;
+  if (useSeasonality) {
+    seasonalIndices = computeSeasonalIndicesAdditive(values);
+    // Deseasonalize for a better WMA base, then reseasonalize
+    var deseasonalized = new Array(n);
+    for (var i = 0; i < n; i++) {
+      deseasonalized[i] = values[i] - seasonalIndices[i % 12];
+    }
+    // Recompute fitted on deseasonalized
+    for (var i = 1; i < n; i++) {
+      var winSize = Math.min(effectiveWindow, i);
+      var wmaW = buildWMAWeights(winSize);
+      var sumVal = 0, sumW = 0;
+      for (var j = 0; j < winSize; j++) {
+        var idx = i - winSize + j;
+        var combinedW = wmaW[j] * seriesWeights[idx];
+        sumVal += combinedW * deseasonalized[idx];
+        sumW += combinedW;
+      }
+      fitted[i] = (sumW > 0 ? sumVal / sumW : deseasonalized[i]) + seasonalIndices[i % 12];
+    }
+  }
+
+  var fittedOut = [];
+  var residuals = [];
+  for (var i = 0; i < n; i++) {
+    fittedOut.push({ month: series[i].month, actual: values[i], fitted: roundTo2(fitted[i]) });
+    residuals.push(roundTo2(values[i] - fitted[i]));
+  }
+
+  // Forecast: WMA of last window values
+  var wmaW = buildWMAWeights(effectiveWindow);
+  var baseValues = useSeasonality
+    ? values.slice(n - effectiveWindow).map(function(v, i) { return v - seasonalIndices[(n - effectiveWindow + i) % 12]; })
+    : values.slice(n - effectiveWindow);
+  var baseWeights = seriesWeights.slice(n - effectiveWindow);
+
+  var baseForecast = 0, bSum = 0;
+  for (var j = 0; j < effectiveWindow; j++) {
+    var cw = wmaW[j] * baseWeights[j];
+    baseForecast += cw * baseValues[j];
+    bSum += cw;
+  }
+  baseForecast = bSum > 0 ? baseForecast / bSum : values[n - 1];
+
+  // Determine starting month index for seasonal pattern
+  var lastMonthParts = series[n - 1].month.split('-');
+  var lastMonthIdx = parseInt(lastMonthParts[1], 10) - 1; // 0-based
+
+  var futureMonths = generateFutureMonths(series[n - 1].month, horizon);
+  var forecasts = [];
+  for (var h = 0; h < horizon; h++) {
+    var fv = baseForecast;
+    if (useSeasonality && seasonalIndices) {
+      var futureMonthIdx = (lastMonthIdx + h + 1) % 12;
+      fv += seasonalIndices[futureMonthIdx];
+    }
+    fv = roundTo2(clampNonNeg(fv));
+    forecasts.push({ month: futureMonths[h], value: fv, fitted: fv });
+  }
+
+  return {
+    method: 'wma',
+    forecasts: forecasts,
+    fitted: fittedOut,
+    residuals: residuals,
+    params: { window: effectiveWindow, seasonality: useSeasonality }
+  };
+}
+
+
+// ============================================================
+// 6. Croston's Method (Intermittent Demand)
+// ============================================================
+
+function forecastCroston(series, params) {
+  if (!series || series.length < 3) return null;
+  params = params || {};
+  var horizon = params.horizon || 18;
+  var n = series.length;
+  var values = [];
+  for (var i = 0; i < n; i++) values.push(series[i].value);
+
+  // Check intermittency: >30% zeros
+  var zeroCount = 0;
+  for (var i = 0; i < n; i++) { if (values[i] === 0) zeroCount++; }
+  if (zeroCount / n <= 0.3) return null;
+
+  // Extract non-zero demands and inter-arrival intervals
+  var demands = [];
+  var intervals = [];
+  var lastNonZero = -1;
+  for (var i = 0; i < n; i++) {
+    if (values[i] > 0) {
+      demands.push(values[i]);
+      if (lastNonZero >= 0) {
+        intervals.push(i - lastNonZero);
+      }
+      lastNonZero = i;
+    }
+  }
+
+  if (demands.length < 3) return null;
+
+  // If we have demands but no intervals yet (only 1 non-zero), can't compute
+  if (intervals.length === 0) return null;
+
+  // Syntetos-Boylan modified Croston
+  var alphaC = 0.15;
+
+  // Smooth demand sizes
+  var smoothDemand = demands[0];
+  for (var i = 1; i < demands.length; i++) {
+    smoothDemand = alphaC * demands[i] + (1 - alphaC) * smoothDemand;
+  }
+
+  // Smooth inter-arrival intervals
+  var smoothInterval = intervals[0];
+  for (var i = 1; i < intervals.length; i++) {
+    smoothInterval = alphaC * intervals[i] + (1 - alphaC) * smoothInterval;
+  }
+
+  // SBA adjustment: multiply rate by (1 - alpha/2)
+  var forecastRate = smoothInterval > 0
+    ? (smoothDemand / smoothInterval) * (1 - alphaC / 2)
+    : 0;
+
+  // Fitted values: apply the evolving forecast backward
+  var fittedVals = new Array(n);
+  var dIdx = 0, iIdx = 0;
+  var runningDemand = demands[0];
+  var runningInterval = intervals.length > 0 ? intervals[0] : 1;
+  var currentRate = (runningDemand / runningInterval) * (1 - alphaC / 2);
+
+  var demandIndex = 0;
+  var intervalIndex = 0;
+  for (var i = 0; i < n; i++) {
+    fittedVals[i] = clampNonNeg(currentRate);
+    if (values[i] > 0) {
+      demandIndex++;
+      if (demandIndex < demands.length) {
+        runningDemand = alphaC * demands[demandIndex] + (1 - alphaC) * runningDemand;
+      }
+      if (intervalIndex < intervals.length) {
+        runningInterval = alphaC * intervals[intervalIndex] + (1 - alphaC) * runningInterval;
+        intervalIndex++;
+      }
+      currentRate = runningInterval > 0
+        ? (runningDemand / runningInterval) * (1 - alphaC / 2)
+        : currentRate;
+    }
+  }
+
+  var fittedOut = [];
+  var residuals = [];
+  for (var i = 0; i < n; i++) {
+    fittedOut.push({ month: series[i].month, actual: values[i], fitted: roundTo2(fittedVals[i]) });
+    residuals.push(roundTo2(values[i] - fittedVals[i]));
+  }
+
+  var futureMonths = generateFutureMonths(series[n - 1].month, horizon);
+  var forecasts = [];
+  var fv = roundTo2(clampNonNeg(forecastRate));
+  for (var h = 0; h < horizon; h++) {
+    forecasts.push({ month: futureMonths[h], value: fv, fitted: fv });
+  }
+
+  return {
+    method: 'croston',
+    forecasts: forecasts,
+    fitted: fittedOut,
+    residuals: residuals,
+    params: { alpha: alphaC, smoothedDemand: roundTo2(smoothDemand), smoothedInterval: roundTo2(smoothInterval), forecastRate: fv }
+  };
+}
+
+  </script>
+  <script>
+// ============================================================
+// Forecast Robustness Module
+// Outlier detection, data cleaning, backtesting, confidence
+// intervals, forecastability scoring, and accuracy grading.
+// Pure JavaScript — no imports, designed for inline use.
+// ============================================================
+
+/**
+ * Detect outliers in a time series using IQR, modified z-score, or both.
+ * Incorporates seasonal awareness and level-shift detection.
+ *
+ * @param {Array<{month: string, value: number, weight: number}>} series
+ * @param {Object} config
+ * @returns {Object} outliers, isLevelShift, levelShiftMonth
+ */
+function detectOutliers(series, config) {
+  if (!series || series.length === 0) {
+    return { outliers: [], isLevelShift: false, levelShiftMonth: null };
+  }
+
+  var cfg = Object.assign(
+    { method: 'both', sensitivity: 1.5, minDataPoints: 6 },
+    config || {}
+  );
+
+  if (series.length < cfg.minDataPoints) {
+    return { outliers: [], isLevelShift: false, levelShiftMonth: null };
+  }
+
+  var values = series.map(function (d) { return d.value; });
+
+  // --- helpers ---
+  function sorted(arr) {
+    return arr.slice().sort(function (a, b) { return a - b; });
+  }
+
+  function median(arr) {
+    var s = sorted(arr);
+    var mid = Math.floor(s.length / 2);
+    return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
+  }
+
+  function quartiles(arr) {
+    var s = sorted(arr);
+    var n = s.length;
+    var q1Idx = (n - 1) * 0.25;
+    var q3Idx = (n - 1) * 0.75;
+    var q1 = s[Math.floor(q1Idx)] + (q1Idx % 1) * (s[Math.ceil(q1Idx)] - s[Math.floor(q1Idx)]);
+    var q3 = s[Math.floor(q3Idx)] + (q3Idx % 1) * (s[Math.ceil(q3Idx)] - s[Math.floor(q3Idx)]);
+    return { q1: q1, q3: q3, iqr: q3 - q1 };
+  }
+
+  // --- seasonal index: group values by calendar month ---
+  var byMonth = {};
+  series.forEach(function (d) {
+    var m = d.month.substring(5, 7); // "01" – "12"
+    if (!byMonth[m]) byMonth[m] = [];
+    byMonth[m].push(d.value);
+  });
+
+  // If we have at least 2 years of a given month we can compute a seasonal median
+  function seasonalMedian(monthStr) {
+    var m = monthStr.substring(5, 7);
+    if (byMonth[m] && byMonth[m].length >= 2) return median(byMonth[m]);
+    return null;
+  }
+
+  // --- IQR method ---
+  var q = quartiles(values);
+  var lowerBound = q.q1 - cfg.sensitivity * q.iqr;
+  var upperBound = q.q3 + cfg.sensitivity * q.iqr;
+  // Severe thresholds at 3x IQR
+  var severeLower = q.q1 - 3 * q.iqr;
+  var severeUpper = q.q3 + 3 * q.iqr;
+
+  // --- Modified z-score method (Iglewicz & Hoaglin) ---
+  var med = median(values);
+  var absDevs = values.map(function (v) { return Math.abs(v - med); });
+  var mad = median(absDevs);
+  // 0.6745 is the 0.75th quantile of the standard normal
+  var madFactor = mad === 0 ? 1 : mad;
+
+  function modifiedZScore(v) {
+    return 0.6745 * (v - med) / madFactor;
+  }
+
+  // --- flag candidates per method ---
+  var candidates = [];
+
+  series.forEach(function (d, i) {
+    var reasons = [];
+    var iqrFlag = false;
+    var zFlag = false;
+    var severity = 'mild';
+
+    if (cfg.method === 'iqr' || cfg.method === 'both') {
+      if (d.value < lowerBound || d.value > upperBound) {
+        iqrFlag = true;
+        var side = d.value < lowerBound ? 'below' : 'above';
+        reasons.push('IQR: value ' + side + ' fence (' +
+          lowerBound.toFixed(1) + ' – ' + upperBound.toFixed(1) + ')');
+        if (d.value < severeLower || d.value > severeUpper) severity = 'severe';
+      }
+    }
+
+    if (cfg.method === 'zscore' || cfg.method === 'both') {
+      var mz = modifiedZScore(d.value);
+      if (Math.abs(mz) > 3.5) {
+        zFlag = true;
+        reasons.push('Modified z-score: ' + mz.toFixed(2));
+        if (Math.abs(mz) > 5) severity = 'severe';
+      }
+    }
+
+    var flagged = cfg.method === 'both' ? (iqrFlag || zFlag) : (iqrFlag || zFlag);
+
+    if (flagged) {
+      candidates.push({
+        index: i,
+        month: d.month,
+        originalValue: d.value,
+        reason: reasons.join('; '),
+        severity: severity
+      });
+    }
+  });
+
+  // --- seasonal awareness: un-flag if value fits seasonal pattern ---
+  candidates = candidates.filter(function (c) {
+    var sMed = seasonalMedian(c.month);
+    if (sMed === null) return true; // not enough seasonal data, keep flag
+    // If the value is within 50% of its seasonal median, it fits the pattern
+    var diff = Math.abs(c.originalValue - sMed);
+    var threshold = Math.abs(sMed) * 0.5;
+    if (threshold < 1) threshold = 1; // guard near-zero medians
+    return diff > threshold;
+  });
+
+  // --- level shift detection ---
+  // If 3+ consecutive flagged points all in the same direction, treat as level shift
+  var isLevelShift = false;
+  var levelShiftMonth = null;
+
+  if (candidates.length >= 3) {
+    // Build a set of flagged indices for fast lookup
+    var flaggedSet = {};
+    candidates.forEach(function (c) { flaggedSet[c.index] = c; });
+
+    var runStart = -1;
+    var runDir = 0; // 1 = above median, -1 = below
+    var bestRunStart = -1;
+    var bestRunLen = 0;
+
+    for (var i = 0; i < series.length; i++) {
+      if (flaggedSet[i]) {
+        var dir = series[i].value > med ? 1 : -1;
+        if (dir === runDir) {
+          var runLen = i - runStart + 1;
+          // Count consecutive flagged in same direction
+          // (allow gaps of 1 non-flagged point within the run)
+          var flaggedInRun = 0;
+          for (var j = runStart; j <= i; j++) {
+            if (flaggedSet[j]) flaggedInRun++;
+          }
+          if (flaggedInRun >= 3 && flaggedInRun > bestRunLen) {
+            bestRunLen = flaggedInRun;
+            bestRunStart = runStart;
+          }
+        } else {
+          runStart = i;
+          runDir = dir;
+        }
+      }
+    }
+
+    if (bestRunLen >= 3) {
+      isLevelShift = true;
+      levelShiftMonth = series[bestRunStart] ? series[bestRunStart].month : null;
+      // Remove consecutive-run outliers from the list (they're a level shift)
+      var runIndices = {};
+      var rDir = series[bestRunStart].value > med ? 1 : -1;
+      for (var k = bestRunStart; k < series.length; k++) {
+        if (flaggedSet[k]) {
+          var d2 = series[k].value > med ? 1 : -1;
+          if (d2 === rDir) runIndices[k] = true;
+          else break;
+        }
+      }
+      candidates = candidates.filter(function (c) { return !runIndices[c.index]; });
+    }
+  }
+
+  return {
+    outliers: candidates,
+    isLevelShift: isLevelShift,
+    levelShiftMonth: levelShiftMonth
+  };
+}
+
+
+/**
+ * Clean outliers from a series using the chosen strategy.
+ *
+ * @param {Array<{month: string, value: number, weight: number}>} series
+ * @param {Array} outliers — from detectOutliers().outliers
+ * @param {string} strategy — 'none'|'flag'|'cap'|'interpolate'
+ * @returns {Object} cleaned series, count, strategy label
+ */
+function cleanOutliers(series, outliers, strategy) {
+  if (!series || series.length === 0) {
+    return { cleaned: [], outliersFound: 0, strategy: strategy || 'none' };
+  }
+
+  strategy = strategy || 'none';
+  var outlierSet = {};
+  (outliers || []).forEach(function (o) { outlierSet[o.index] = o; });
+
+  var values = series.map(function (d) { return d.value; });
+
+  // Quartile computation for capping
+  function sorted(arr) {
+    return arr.slice().sort(function (a, b) { return a - b; });
+  }
+  var s = sorted(values);
+  var n = s.length;
+  var q1Idx = (n - 1) * 0.25;
+  var q3Idx = (n - 1) * 0.75;
+  var q1 = s[Math.floor(q1Idx)] + (q1Idx % 1) * (s[Math.ceil(q1Idx)] - s[Math.floor(q1Idx)]);
+  var q3 = s[Math.floor(q3Idx)] + (q3Idx % 1) * (s[Math.ceil(q3Idx)] - s[Math.floor(q3Idx)]);
+  var iqr = q3 - q1;
+  var capLower = q1 - 1.5 * iqr;
+  var capUpper = q3 + 1.5 * iqr;
+
+  var cleaned = series.map(function (d, i) {
+    var isOut = !!outlierSet[i];
+    var entry = {
+      month: d.month,
+      value: d.value,
+      weight: d.weight,
+      isOutlier: isOut,
+      originalValue: isOut ? d.value : null
+    };
+
+    if (!isOut || strategy === 'none' || strategy === 'flag') {
+      return entry;
+    }
+
+    if (strategy === 'cap') {
+      if (d.value < capLower) entry.value = capLower;
+      else if (d.value > capUpper) entry.value = capUpper;
+      return entry;
+    }
+
+    if (strategy === 'interpolate') {
+      // Find nearest non-outlier neighbors
+      var leftVal = null;
+      var rightVal = null;
+      for (var l = i - 1; l >= 0; l--) {
+        if (!outlierSet[l]) { leftVal = series[l].value; break; }
+      }
+      for (var r = i + 1; r < series.length; r++) {
+        if (!outlierSet[r]) { rightVal = series[r].value; break; }
+      }
+      if (leftVal !== null && rightVal !== null) {
+        // Linear interpolation: find actual distance for proportional weighting
+        var leftIdx = -1, rightIdx = -1;
+        for (var l2 = i - 1; l2 >= 0; l2--) {
+          if (!outlierSet[l2]) { leftIdx = l2; break; }
+        }
+        for (var r2 = i + 1; r2 < series.length; r2++) {
+          if (!outlierSet[r2]) { rightIdx = r2; break; }
+        }
+        var span = rightIdx - leftIdx;
+        var pos = i - leftIdx;
+        entry.value = leftVal + (rightVal - leftVal) * (pos / span);
+      } else if (leftVal !== null) {
+        entry.value = leftVal;
+      } else if (rightVal !== null) {
+        entry.value = rightVal;
+      }
+      // If both null (all points are outliers), keep original
+    }
+
+    return entry;
+  });
+
+  return {
+    cleaned: cleaned,
+    outliersFound: Object.keys(outlierSet).length,
+    strategy: strategy
+  };
+}
+
+
+/**
+ * Calculate accuracy metrics comparing actuals to predicted values.
+ *
+ * @param {number[]} actuals
+ * @param {number[]} predicted
+ * @returns {Object} metrics
+ */
+function calculateAccuracyMetrics(actuals, predicted) {
+  if (!actuals || !predicted || actuals.length === 0 || predicted.length === 0) {
+    return {
+      mape: null, wmape: null, mae: null, rmse: null,
+      bias: null, biasPercent: null, trackingSignal: null
+    };
+  }
+
+  var n = Math.min(actuals.length, predicted.length);
+  var sumAbsError = 0;
+  var sumSqError = 0;
+  var sumError = 0;        // signed for bias
+  var sumAbsActual = 0;
+  var mapeSum = 0;
+  var mapeCount = 0;
+  var cumError = 0;
+  var cumAbsError = 0;
+
+  for (var i = 0; i < n; i++) {
+    var err = predicted[i] - actuals[i];
+    var absErr = Math.abs(err);
+    sumAbsError += absErr;
+    sumSqError += err * err;
+    sumError += err;
+    sumAbsActual += Math.abs(actuals[i]);
+    cumError += err;
+    cumAbsError += absErr;
+
+    // MAPE: skip zero actuals
+    if (actuals[i] !== 0) {
+      mapeSum += Math.abs(err / actuals[i]);
+      mapeCount++;
+    }
+  }
+
+  var mae = sumAbsError / n;
+  var rmse = Math.sqrt(sumSqError / n);
+  var bias = sumError / n;
+  var meanActual = sumAbsActual / n;
+  var biasPercent = meanActual !== 0 ? (bias / meanActual) * 100 : null;
+  var mape = mapeCount > 0 ? (mapeSum / mapeCount) : null;
+  var wmape = sumAbsActual !== 0 ? (sumAbsError / sumAbsActual) : null;
+
+  // Tracking signal: cumulative forecast error / MAD
+  var mad = cumAbsError / n;
+  var trackingSignal = mad !== 0 ? cumError / mad : null;
+
+  return {
+    mape: mape,
+    wmape: wmape,
+    mae: mae,
+    rmse: rmse,
+    bias: bias,
+    biasPercent: biasPercent,
+    trackingSignal: trackingSignal
+  };
+}
+
+
+/**
+ * Backtest a forecast function using expanding-window cross-validation.
+ *
+ * @param {Array<{month: string, value: number, weight: number}>} series
+ * @param {Function} forecastFn — function(trainSeries, params, horizon) => {forecasts: [{month, value}]}
+ * @param {Object} params — passed through to forecastFn
+ * @param {Object} config
+ * @returns {Object} folds and aggregate metrics
+ */
+function backtestForecast(series, forecastFn, params, config) {
+  var cfg = Object.assign(
+    { minTrainSize: 12, testSize: 3, maxFolds: 6, step: 3 },
+    config || {}
+  );
+
+  if (!series || series.length < cfg.minTrainSize + cfg.testSize) {
+    return {
+      folds: [],
+      metrics: {
+        mape: null, wmape: null, mae: null, rmse: null,
+        bias: null, biasPercent: null, trackingSignal: null
+      }
+    };
+  }
+
+  var folds = [];
+  var cutoff = cfg.minTrainSize;
+
+  while (cutoff + cfg.testSize <= series.length && folds.length < cfg.maxFolds) {
+    var trainSlice = series.slice(0, cutoff);
+    var testSlice = series.slice(cutoff, cutoff + cfg.testSize);
+
+    var result = forecastFn(trainSlice, params, cfg.testSize);
+    var preds = result.forecasts || [];
+
+    var predictions = [];
+    for (var t = 0; t < testSlice.length && t < preds.length; t++) {
+      predictions.push({
+        month: testSlice[t].month,
+        actual: testSlice[t].value,
+        predicted: preds[t].value
+      });
+    }
+
+    folds.push({
+      trainEnd: trainSlice[trainSlice.length - 1].month,
+      predictions: predictions
+    });
+
+    cutoff += cfg.step;
+  }
+
+  if (folds.length === 0) {
+    return {
+      folds: [],
+      metrics: {
+        mape: null, wmape: null, mae: null, rmse: null,
+        bias: null, biasPercent: null, trackingSignal: null
+      }
+    };
+  }
+
+  // Weight recent folds more: linearly from 1 (first) to 2 (last)
+  var totalWeight = 0;
+  var wSumAbsError = 0;
+  var wSumSqError = 0;
+  var wSumError = 0;
+  var wSumAbsActual = 0;
+  var wMapeSum = 0;
+  var wMapeCount = 0;
+  var allActuals = [];
+  var allPredicted = [];
+
+  folds.forEach(function (fold, fi) {
+    var w = folds.length === 1 ? 1 : 1 + (fi / (folds.length - 1));
+    fold.predictions.forEach(function (p) {
+      var err = p.predicted - p.actual;
+      var absErr = Math.abs(err);
+      wSumAbsError += absErr * w;
+      wSumSqError += err * err * w;
+      wSumError += err * w;
+      wSumAbsActual += Math.abs(p.actual) * w;
+      totalWeight += w;
+
+      if (p.actual !== 0) {
+        wMapeSum += Math.abs(err / p.actual) * w;
+        wMapeCount += w;
+      }
+
+      allActuals.push(p.actual);
+      allPredicted.push(p.predicted);
+    });
+  });
+
+  var metrics = {
+    mape: wMapeCount > 0 ? wMapeSum / wMapeCount : null,
+    wmape: wSumAbsActual > 0 ? wSumAbsError / wSumAbsActual : null,
+    mae: totalWeight > 0 ? wSumAbsError / totalWeight : null,
+    rmse: totalWeight > 0 ? Math.sqrt(wSumSqError / totalWeight) : null,
+    bias: totalWeight > 0 ? wSumError / totalWeight : null,
+    biasPercent: null,
+    trackingSignal: null
+  };
+
+  // Bias percent and tracking signal from unweighted totals for interpretability
+  var unweighted = calculateAccuracyMetrics(allActuals, allPredicted);
+  metrics.biasPercent = unweighted.biasPercent;
+  metrics.trackingSignal = unweighted.trackingSignal;
+
+  return { folds: folds, metrics: metrics };
+}
+
+
+/**
+ * Build prediction intervals around forecasted values.
+ *
+ * @param {Array<{month: string, value: number}>} forecasts
+ * @param {number[]} residuals — in-sample residuals
+ * @param {number} level — confidence level (0.80 or 0.95)
+ * @returns {Array<{month: string, value: number, lower: number, upper: number}>}
+ */
+function buildConfidenceIntervals(forecasts, residuals, level) {
+  if (!forecasts || forecasts.length === 0) return [];
+
+  level = level || 0.95;
+
+  // z-score lookup for common levels
+  var zMap = { 0.80: 1.28, 0.90: 1.645, 0.95: 1.96, 0.99: 2.576 };
+  var z = zMap[level] || 1.96;
+
+  // Standard deviation of residuals
+  var resids = residuals || [];
+  var std = 0;
+  if (resids.length > 1) {
+    var mean = 0;
+    for (var i = 0; i < resids.length; i++) mean += resids[i];
+    mean /= resids.length;
+    var sumSq = 0;
+    for (var j = 0; j < resids.length; j++) {
+      var diff = resids[j] - mean;
+      sumSq += diff * diff;
+    }
+    std = Math.sqrt(sumSq / (resids.length - 1)); // sample std dev
+  } else if (resids.length === 1) {
+    std = Math.abs(resids[0]);
+  }
+
+  return forecasts.map(function (f, idx) {
+    var h = idx + 1; // forecast step (1-indexed)
+    // Interval widens by sqrt(h) for increasing uncertainty
+    var halfWidth = z * std * Math.sqrt(h);
+    var lower = f.value - halfWidth;
+    if (lower < 0) lower = 0; // demand floor at 0
+    return {
+      month: f.month,
+      value: f.value,
+      lower: lower,
+      upper: f.value + halfWidth
+    };
+  });
+}
+
+
+/**
+ * Score how forecastable a time series is (0–100).
+ *
+ * @param {Array<{month: string, value: number, weight: number}>} series
+ * @param {Object} characteristics — output from detectDataCharacteristics
+ * @returns {Object} score and contributing factors
+ */
+function assessForecastability(series, characteristics) {
+  var chars = characteristics || {};
+  var n = series ? series.length : 0;
+  var score = 0;
+  var factors = [];
+
+  // Series length
+  if (n < 6) {
+    factors.push('Too few data points (' + n + ' months)');
+  } else if (n < 12) {
+    score += 20;
+    factors.push('Short history (' + n + ' months, +20)');
+  } else if (n < 24) {
+    score += 40;
+    factors.push('Moderate history (' + n + ' months, +40)');
+  } else {
+    score += 50;
+    factors.push('Strong history (' + n + ' months, +50)');
+  }
+
+  // Volatility (coefficient of variation)
+  var cv = chars.cv != null ? chars.cv : null;
+  if (cv === null && series && series.length > 1) {
+    // Compute CV if not provided
+    var vals = series.map(function (d) { return d.value; });
+    var mean = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    if (mean !== 0) {
+      var variance = vals.reduce(function (s, v) { return s + (v - mean) * (v - mean); }, 0) / vals.length;
+      cv = Math.sqrt(variance) / Math.abs(mean);
+    }
+  }
+  if (cv !== null) {
+    if (cv < 0.3) {
+      score += 30;
+      factors.push('Low volatility (CV=' + cv.toFixed(2) + ', +30)');
+    } else if (cv < 0.6) {
+      score += 20;
+      factors.push('Moderate volatility (CV=' + cv.toFixed(2) + ', +20)');
+    } else if (cv < 1.0) {
+      score += 10;
+      factors.push('High volatility (CV=' + cv.toFixed(2) + ', +10)');
+    } else {
+      factors.push('Very high volatility (CV=' + cv.toFixed(2) + ', +0)');
+    }
+  }
+
+  // Intermittent demand
+  if (chars.intermittent) {
+    score -= 20;
+    factors.push('Intermittent demand (-20)');
+  }
+
+  // Level shift
+  if (chars.hasLevelShift || chars.levelShift) {
+    score -= 15;
+    factors.push('Level shift detected (-15)');
+  }
+
+  // Seasonality (predictable pattern is good)
+  if (chars.hasSeasonality || chars.seasonal) {
+    score += 10;
+    factors.push('Seasonal pattern detected (+10)');
+  }
+
+  // Consistent trend
+  if (chars.hasTrend || chars.trend) {
+    score += 10;
+    factors.push('Consistent trend (+10)');
+  }
+
+  // Clamp to [0, 100]
+  if (score > 100) score = 100;
+  if (score < 0) score = 0;
+
+  return { score: score, factors: factors };
+}
+
+
+/**
+ * Convert WMAPE to a letter grade.
+ *
+ * @param {number} wmape — weighted mean absolute percentage error (0–1 scale)
+ * @returns {string} 'A'|'B'|'C'|'F'
+ */
+function gradeAccuracy(wmape) {
+  if (wmape == null || isNaN(wmape)) return 'F';
+  if (wmape < 0.15) return 'A';
+  if (wmape < 0.30) return 'B';
+  if (wmape < 0.50) return 'C';
+  return 'F';
+}
+
+  </script>
+  <script>
+// ============================================================================
+// forecast-ensemble.js — Auto-selection, ensemble forecasting, batch orchestrator
+// Dependencies (global scope): forecast-core.js, forecast-robustness.js, data-pipeline.js
+// ============================================================================
+
+var methodNameMap = {
+  ses: 'Simple Exp. Smoothing',
+  holt: "Holt's Linear Trend",
+  hw_additive: 'Holt-Winters (Additive)',
+  hw_multiplicative: 'Holt-Winters (Multiplicative)',
+  wma: 'Weighted Moving Average',
+  croston: "Croston's (Intermittent)",
+  ensemble: 'Weighted Ensemble'
+};
+
+// ---------------------------------------------------------------------------
+// Map method name → forecast function from forecast-core.js
+// ---------------------------------------------------------------------------
+function _getForecastFunction(methodName) {
+  var fnMap = {
+    ses: forecastSES,
+    holt: forecastHolt,
+    hw_additive: forecastHoltWintersAdditive,
+    hw_multiplicative: forecastHoltWintersMultiplicative,
+    wma: forecastWMA,
+    croston: forecastCroston
+  };
+  return fnMap[methodName] || null;
+}
+
+// ---------------------------------------------------------------------------
+// getApplicableMethods(characteristics, config)
+// Returns an array of method-name strings that are valid for this series
+// and also selected by the user.
+// ---------------------------------------------------------------------------
+function getApplicableMethods(characteristics, config) {
+  var length = characteristics.length || 0;
+  var hasSeason = characteristics.hasSeasonality;
+  var isIntermittent = characteristics.isIntermittent;
+  var allPositive = characteristics.allPositive !== undefined
+    ? characteristics.allPositive
+    : true; // assume positive unless told otherwise
+
+  // If characteristics doesn't explicitly carry allPositive, derive it
+  // from the raw values stored on the object (some pipelines attach them).
+  if (characteristics.allPositive === undefined && Array.isArray(characteristics.values)) {
+    allPositive = characteristics.values.every(function (v) { return v > 0; });
+  }
+
+  var candidateRules = {
+    ses:                 length >= 3,
+    holt:                length >= 6,
+    hw_additive:         length >= 24 && hasSeason,
+    hw_multiplicative:   length >= 24 && hasSeason && allPositive,
+    wma:                 length >= 3,
+    croston:             isIntermittent
+  };
+
+  var userMethods = config.methods || Object.keys(candidateRules);
+
+  var applicable = [];
+  for (var i = 0; i < userMethods.length; i++) {
+    var m = userMethods[i];
+    if (candidateRules[m]) {
+      applicable.push(m);
+    }
+  }
+  return applicable;
+}
+
+// ---------------------------------------------------------------------------
+// _buildFlatForecast — fallback for series that are too short
+// ---------------------------------------------------------------------------
+function _buildFlatForecast(series, horizon, method) {
+  var sum = 0;
+  for (var i = 0; i < series.length; i++) {
+    sum += (series[i].value != null ? series[i].value : 0);
+  }
+  var avg = series.length > 0 ? sum / series.length : 0;
+
+  var lastMonth = series.length > 0 ? series[series.length - 1].month : null;
+  var futureMonths = lastMonth
+    ? generateFutureMonths(lastMonth, horizon)
+    : [];
+
+  var forecasts = [];
+  for (var j = 0; j < futureMonths.length; j++) {
+    forecasts.push({
+      month: futureMonths[j],
+      value: avg,
+      lower: 0,
+      upper: avg * 2
+    });
+  }
+
+  return {
+    method: method || 'flat',
+    forecasts: forecasts,
+    fitted: [],
+    residuals: [],
+    accuracy: { mape: Infinity, wmape: Infinity, bias: 0, mae: Infinity, rmse: Infinity, biasPercent: 0, trackingSignal: 0 },
+    grade: 'F'
+  };
+}
+
+// ---------------------------------------------------------------------------
+// _backtestParamsForMethod — build the params object a forecast function needs
+// ---------------------------------------------------------------------------
+function _buildMethodParams(methodName, series, config) {
+  var horizon = config.horizon || 18;
+  var seasonality = config.seasonality !== false;
+
+  switch (methodName) {
+    case 'ses':
+      return { horizon: horizon };
+    case 'holt':
+      return { horizon: horizon };
+    case 'hw_additive':
+      return { horizon: horizon, seasonalPeriod: 12 };
+    case 'hw_multiplicative':
+      return { horizon: horizon, seasonalPeriod: 12 };
+    case 'wma':
+      return { horizon: horizon, windowSize: Math.min(6, series.length) };
+    case 'croston':
+      return { horizon: horizon };
+    default:
+      return { horizon: horizon };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _runSingleMethod — safely execute one forecast method + backtest
+// Returns null if the method throws or produces no usable output.
+// ---------------------------------------------------------------------------
+function _runSingleMethod(methodName, cleanedSeries, config) {
+  var forecastFn = _getForecastFunction(methodName);
+  if (!forecastFn) return null;
+
+  var params = _buildMethodParams(methodName, cleanedSeries, config);
+
+  try {
+    // Run the actual forecast
+    var result = forecastFn(cleanedSeries, params);
+    if (!result || !result.forecasts || result.forecasts.length === 0) return null;
+
+    // Backtest configuration — hold out up to 6 months, at least 3
+    var holdout = Math.min(6, Math.floor(cleanedSeries.length / 3));
+    if (holdout < 2) holdout = 2;
+    var backtestConfig = {
+      folds: Math.min(3, Math.floor(cleanedSeries.length / (holdout + 3))),
+      holdout: holdout
+    };
+    if (backtestConfig.folds < 1) backtestConfig.folds = 1;
+
+    var backtestResult;
+    try {
+      backtestResult = backtestForecast(cleanedSeries, forecastFn, params, backtestConfig);
+    } catch (_) {
+      // If backtest fails, fall back to in-sample accuracy
+      backtestResult = null;
+    }
+
+    var accuracy;
+    if (backtestResult && (backtestResult.metrics || backtestResult.accuracy)) {
+      accuracy = backtestResult.metrics || backtestResult.accuracy;
+    } else if (result.accuracy) {
+      accuracy = result.accuracy;
+    } else if (result.fitted && result.fitted.length > 0) {
+      // Use in-sample fitted vs actuals for accuracy
+      var inSampleActuals = result.fitted.map(function(f) { return f.actual != null ? f.actual : 0; });
+      var inSamplePredicted = result.fitted.map(function(f) { return f.fitted != null ? f.fitted : 0; });
+      accuracy = calculateAccuracyMetrics(inSampleActuals, inSamplePredicted);
+    } else {
+      accuracy = { mape: Infinity, wmape: Infinity, bias: 0, mae: Infinity, rmse: Infinity, biasPercent: 0, trackingSignal: 0 };
+    }
+
+    var grade = gradeAccuracy(accuracy.wmape != null ? accuracy.wmape : Infinity);
+
+    return {
+      method: methodName,
+      forecasts: result.forecasts,
+      fitted: result.fitted || [],
+      residuals: result.residuals || [],
+      accuracy: accuracy,
+      grade: grade
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ensembleForecast(methodResults, series, horizon)
+// Weighted ensemble of top-performing methods (inverse-WMAPE weighting).
+// ---------------------------------------------------------------------------
+function ensembleForecast(methodResults, series, horizon) {
+  // Collect methods that completed successfully and are not grade-F (WMAPE <= 0.5)
+  var eligible = [];
+  var methodNames = Object.keys(methodResults);
+  for (var i = 0; i < methodNames.length; i++) {
+    var mr = methodResults[methodNames[i]];
+    if (!mr || !mr.forecasts || mr.forecasts.length === 0) continue;
+    var wmape = (mr.accuracy && mr.accuracy.wmape != null) ? mr.accuracy.wmape : Infinity;
+    if (wmape > 0.5) continue; // exclude grade-F
+    eligible.push(mr);
+  }
+
+  // If nothing is eligible, fall back to everything that completed
+  if (eligible.length === 0) {
+    for (var j = 0; j < methodNames.length; j++) {
+      var mr2 = methodResults[methodNames[j]];
+      if (mr2 && mr2.forecasts && mr2.forecasts.length > 0) {
+        eligible.push(mr2);
+      }
+    }
+  }
+
+  // If still nothing, return null (caller will fall back)
+  if (eligible.length === 0) return null;
+
+  // If only one method, just return it re-labeled
+  if (eligible.length === 1) {
+    var solo = eligible[0];
+    return {
+      method: 'ensemble',
+      forecasts: solo.forecasts,
+      fitted: solo.fitted || [],
+      residuals: solo.residuals || [],
+      accuracy: solo.accuracy,
+      grade: solo.grade
+    };
+  }
+
+  // Calculate inverse-WMAPE weights
+  var rawWeights = [];
+  var totalWeight = 0;
+  for (var k = 0; k < eligible.length; k++) {
+    var w = (eligible[k].accuracy && eligible[k].accuracy.wmape != null && eligible[k].accuracy.wmape !== 0)
+      ? 1 / eligible[k].accuracy.wmape
+      : 10; // WMAPE = 0 → perfect, assign high weight
+    rawWeights.push(w);
+    totalWeight += w;
+  }
+
+  // Normalize
+  var weights = [];
+  for (var n = 0; n < rawWeights.length; n++) {
+    weights.push(totalWeight > 0 ? rawWeights[n] / totalWeight : 1 / eligible.length);
+  }
+
+  // Determine the forecast horizon from the component forecasts
+  var maxLen = 0;
+  for (var p = 0; p < eligible.length; p++) {
+    if (eligible[p].forecasts.length > maxLen) maxLen = eligible[p].forecasts.length;
+  }
+  var forecastLen = Math.min(horizon, maxLen);
+
+  // Weighted average of forecasts; widest confidence intervals (conservative)
+  var ensembleForecasts = [];
+  for (var m = 0; m < forecastLen; m++) {
+    var weightedSum = 0;
+    var activeWeight = 0;
+    var lower = Infinity;
+    var upper = -Infinity;
+    var month = null;
+
+    for (var q = 0; q < eligible.length; q++) {
+      if (m >= eligible[q].forecasts.length) continue;
+      var fc = eligible[q].forecasts[m];
+      if (!month) month = fc.month;
+      weightedSum += fc.value * weights[q];
+      activeWeight += weights[q];
+
+      if (fc.lower != null && fc.lower < lower) lower = fc.lower;
+      if (fc.upper != null && fc.upper > upper) upper = fc.upper;
+    }
+
+    var ensVal = activeWeight > 0 ? weightedSum / activeWeight : 0;
+
+    // Sanity-check bounds
+    if (lower === Infinity) lower = ensVal * 0.5;
+    if (upper === -Infinity) upper = ensVal * 1.5;
+
+    ensembleForecasts.push({
+      month: month,
+      value: Math.max(0, ensVal),
+      lower: Math.max(0, lower),
+      upper: Math.max(0, upper)
+    });
+  }
+
+  // Build ensemble fitted values — weighted average of component fitted values
+  var maxFitted = 0;
+  for (var fi = 0; fi < eligible.length; fi++) {
+    if (eligible[fi].fitted && eligible[fi].fitted.length > maxFitted) {
+      maxFitted = eligible[fi].fitted.length;
+    }
+  }
+  var ensembleFitted = [];
+  for (var fm = 0; fm < maxFitted; fm++) {
+    var fSum = 0;
+    var fW = 0;
+    for (var fq = 0; fq < eligible.length; fq++) {
+      if (!eligible[fq].fitted || fm >= eligible[fq].fitted.length) continue;
+      var fv = eligible[fq].fitted[fm];
+      if (fv != null && typeof fv === 'object' && fv.value != null) {
+        fSum += fv.value * weights[fq];
+      } else if (typeof fv === 'number') {
+        fSum += fv * weights[fq];
+      } else {
+        continue;
+      }
+      fW += weights[fq];
+    }
+    ensembleFitted.push(fW > 0 ? fSum / fW : 0);
+  }
+
+  // Calculate ensemble residuals from fitted vs actuals
+  var ensembleResiduals = [];
+  var actStart = series.length - ensembleFitted.length;
+  for (var ri = 0; ri < ensembleFitted.length; ri++) {
+    var idx = actStart + ri;
+    if (idx >= 0 && idx < series.length) {
+      var actual = series[idx].value != null ? series[idx].value : 0;
+      ensembleResiduals.push(actual - ensembleFitted[ri]);
+    }
+  }
+
+  // Calculate accuracy metrics for the ensemble
+  var ensAccuracy;
+  try {
+    var actSlice = series.slice(Math.max(0, actStart));
+    ensAccuracy = calculateAccuracyMetrics(actSlice, ensembleResiduals);
+  } catch (_) {
+    // Fallback: average the component accuracies weighted
+    var avgWmape = 0;
+    for (var ai = 0; ai < eligible.length; ai++) {
+      avgWmape += (eligible[ai].accuracy.wmape || 0) * weights[ai];
+    }
+    ensAccuracy = {
+      mape: avgWmape * 100,
+      wmape: avgWmape,
+      bias: 0,
+      mae: 0,
+      rmse: 0,
+      biasPercent: 0,
+      trackingSignal: 0
+    };
+  }
+
+  var ensGrade = gradeAccuracy(ensAccuracy.wmape != null ? ensAccuracy.wmape : Infinity);
+
+  return {
+    method: 'ensemble',
+    forecasts: ensembleForecasts,
+    fitted: ensembleFitted,
+    residuals: ensembleResiduals,
+    accuracy: ensAccuracy,
+    grade: ensGrade
+  };
+}
+
+// ---------------------------------------------------------------------------
+// forecastSKU(sku, config)
+// End-to-end forecast for a single SKU.
+// ---------------------------------------------------------------------------
+function forecastSKU(sku, config) {
+  var horizon = config.horizon || 18;
+  var result = {
+    sku: sku,
+    characteristics: null,
+    outliers: null,
+    cleanedSeries: [],
+    methodResults: {},
+    bestMethod: null,
+    selectedResult: null,
+    forecastabilityScore: 0,
+    overrides: {}
+  };
+
+  // Step 1: Extract time series
+  var series;
+  try {
+    var tsResult = extractTimeSeries(sku, config.source, config.recencyWeight);
+    series = tsResult.series || tsResult || [];
+  } catch (_) {
+    series = [];
+  }
+
+  // Step 2: Insufficient data — flat forecast
+  if (!series || series.length < 3) {
+    var flat = _buildFlatForecast(series || [], horizon, 'flat');
+    result.characteristics = { length: series ? series.length : 0 };
+    result.selectedResult = flat;
+    result.bestMethod = 'flat';
+    result.forecastabilityScore = 0;
+    return result;
+  }
+
+  // Step 3: Detect data characteristics
+  try {
+    result.characteristics = detectDataCharacteristics(series);
+  } catch (_) {
+    result.characteristics = {
+      length: series.length,
+      hasSeasonality: false,
+      hasTrend: false,
+      trendDirection: 'flat',
+      isIntermittent: false,
+      allPositive: series.every(function (s) { return (s.value || 0) > 0; })
+    };
+  }
+
+  // Step 4: Outlier detection and handling
+  var cleanedSeries = series;
+  try {
+    var outlierResult = detectOutliers(series, { sensitivity: config.outlierSensitivity || 1.5, method: 'both' });
+    result.outliers = outlierResult;
+
+    if (config.outlierHandling && config.outlierHandling !== 'none') {
+      var cleanResult = cleanOutliers(series, outlierResult.outliers || [], config.outlierHandling);
+      cleanedSeries = cleanResult.cleaned || cleanResult || series;
+    }
+  } catch (_) {
+    result.outliers = { outliers: [], isLevelShift: false, levelShiftMonth: null };
+  }
+  result.cleanedSeries = cleanedSeries;
+
+  // Ensure characteristics has allPositive flag for method selection
+  if (result.characteristics.allPositive === undefined) {
+    result.characteristics.allPositive = cleanedSeries.every(function (s) {
+      return (s.value != null ? s.value : 0) > 0;
+    });
+  }
+
+  // Step 5: Determine applicable methods
+  var applicable = getApplicableMethods(result.characteristics, config);
+
+  // If no methods are applicable, return flat forecast
+  if (applicable.length === 0) {
+    var flat2 = _buildFlatForecast(cleanedSeries, horizon, 'flat');
+    result.selectedResult = flat2;
+    result.bestMethod = 'flat';
+    result.forecastabilityScore = 0;
+    return result;
+  }
+
+  // Step 6: Run each applicable method + backtest
+  for (var i = 0; i < applicable.length; i++) {
+    var methodName = applicable[i];
+    var methodResult = _runSingleMethod(methodName, cleanedSeries, config);
+    if (methodResult) {
+      result.methodResults[methodName] = methodResult;
+    }
+  }
+
+  // If no methods produced results, fall back to flat
+  var completedMethods = Object.keys(result.methodResults);
+  if (completedMethods.length === 0) {
+    var flat3 = _buildFlatForecast(cleanedSeries, horizon, 'flat');
+    result.selectedResult = flat3;
+    result.bestMethod = 'flat';
+    result.forecastabilityScore = 0;
+    return result;
+  }
+
+  // Step 7: Select the best method
+  var selected = null;
+
+  if (config.useEnsemble) {
+    // Ensemble mode
+    selected = ensembleForecast(result.methodResults, cleanedSeries, horizon);
+    if (selected) {
+      result.bestMethod = 'ensemble';
+    }
+  }
+
+  if (!selected && config.autoSelect) {
+    // Auto-select: pick method with lowest WMAPE
+    var bestWmape = Infinity;
+    var bestKey = null;
+    for (var j = 0; j < completedMethods.length; j++) {
+      var mr = result.methodResults[completedMethods[j]];
+      var wmape = (mr.accuracy && mr.accuracy.wmape != null) ? mr.accuracy.wmape : Infinity;
+      if (wmape < bestWmape) {
+        bestWmape = wmape;
+        bestKey = completedMethods[j];
+      }
+    }
+    if (bestKey) {
+      selected = result.methodResults[bestKey];
+      result.bestMethod = bestKey;
+    }
+  }
+
+  if (!selected) {
+    // Manual mode: use the first user-selected method that was applicable
+    var userMethods = config.methods || [];
+    for (var u = 0; u < userMethods.length; u++) {
+      if (result.methodResults[userMethods[u]]) {
+        selected = result.methodResults[userMethods[u]];
+        result.bestMethod = userMethods[u];
+        break;
+      }
+    }
+  }
+
+  // Final fallback: use the first completed method
+  if (!selected) {
+    selected = result.methodResults[completedMethods[0]];
+    result.bestMethod = completedMethods[0];
+  }
+
+  // Step 8: Build confidence intervals for the selected forecast
+  try {
+    var ciForecasts = buildConfidenceIntervals(
+      selected.forecasts,
+      selected.residuals || [],
+      0.95
+    );
+    // Merge CI data into selected forecasts if buildConfidenceIntervals returns
+    // an enriched array
+    if (ciForecasts && ciForecasts.length > 0) {
+      for (var ci = 0; ci < selected.forecasts.length && ci < ciForecasts.length; ci++) {
+        if (ciForecasts[ci].lower != null) {
+          selected.forecasts[ci].lower = ciForecasts[ci].lower;
+        }
+        if (ciForecasts[ci].upper != null) {
+          selected.forecasts[ci].upper = ciForecasts[ci].upper;
+        }
+      }
+    }
+  } catch (_) {
+    // CIs may already exist from the forecast function; leave as-is
+  }
+
+  result.selectedResult = {
+    method: selected.method,
+    forecasts: selected.forecasts,
+    accuracy: selected.accuracy,
+    grade: selected.grade || gradeAccuracy(selected.accuracy && selected.accuracy.wmape != null ? selected.accuracy.wmape : Infinity)
+  };
+
+  // Step 9: Assess forecastability
+  try {
+    var fa = assessForecastability(cleanedSeries, result.characteristics);
+    result.forecastabilityScore = (typeof fa === 'number') ? fa : (fa && fa.score != null ? fa.score : 0.5);
+  } catch (_) {
+    result.forecastabilityScore = 0.5;
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// runBatchForecast(skus, config, progressCallback)
+// Asynchronous batch orchestrator. Processes SKUs in chunks to avoid
+// freezing the browser, yielding to the event loop every 5 SKUs.
+// ---------------------------------------------------------------------------
+async function runBatchForecast(skus, config, progressCallback) {
+  var results = [];
+  var total = skus.length;
+
+  for (var i = 0; i < total; i++) {
+    try {
+      results.push(forecastSKU(skus[i], config));
+    } catch (_) {
+      // If a single SKU fails catastrophically, push a minimal failed result
+      results.push({
+        sku: skus[i],
+        characteristics: { length: 0 },
+        outliers: { outliers: [], isLevelShift: false, levelShiftMonth: null },
+        cleanedSeries: [],
+        methodResults: {},
+        bestMethod: 'flat',
+        selectedResult: {
+          method: 'flat',
+          forecasts: [],
+          accuracy: { mape: Infinity, wmape: Infinity, bias: 0, mae: Infinity, rmse: Infinity, biasPercent: 0, trackingSignal: 0 },
+          grade: 'F'
+        },
+        forecastabilityScore: 0,
+        overrides: {}
+      });
+    }
+
+    if (typeof progressCallback === 'function') {
+      progressCallback(i + 1, total);
+    }
+
+    // Yield to the browser every 5 SKUs to keep UI responsive
+    if (i % 5 === 4) {
+      await new Promise(function (r) { setTimeout(r, 0); });
+    }
+  }
+
+  // Calculate aggregate summary statistics
+  var summary = _buildBatchSummary(results);
+
+  return { results: results, summary: summary };
+}
+
+// ---------------------------------------------------------------------------
+// _buildBatchSummary(results) — aggregate stats across all SKU results
+// ---------------------------------------------------------------------------
+function _buildBatchSummary(results) {
+  var totalSKUs = results.length;
+  var gradeDistribution = { A: 0, B: 0, C: 0, F: 0 };
+  var methodDistribution = {};
+  var totalOutliers = 0;
+  var wmapeSum = 0;
+  var wmapeCount = 0;
+
+  for (var i = 0; i < results.length; i++) {
+    var r = results[i];
+
+    // Grade distribution
+    var grade = (r.selectedResult && r.selectedResult.grade) ? r.selectedResult.grade : 'F';
+    if (gradeDistribution[grade] !== undefined) {
+      gradeDistribution[grade]++;
+    } else {
+      gradeDistribution.F++;
+    }
+
+    // Method distribution
+    var method = r.bestMethod || 'flat';
+    if (!methodDistribution[method]) {
+      methodDistribution[method] = 0;
+    }
+    methodDistribution[method]++;
+
+    // WMAPE accumulator (skip Infinity values to avoid NaN average)
+    if (r.selectedResult && r.selectedResult.accuracy && r.selectedResult.accuracy.wmape != null) {
+      var w = r.selectedResult.accuracy.wmape;
+      if (isFinite(w)) {
+        wmapeSum += w;
+        wmapeCount++;
+      }
+    }
+
+    // Outlier count
+    if (r.outliers && Array.isArray(r.outliers.outliers)) {
+      totalOutliers += r.outliers.outliers.length;
+    }
+  }
+
+  var avgWMAPE = wmapeCount > 0 ? wmapeSum / wmapeCount : 0;
+
+  return {
+    avgWMAPE: avgWMAPE,
+    gradeDistribution: gradeDistribution,
+    methodDistribution: methodDistribution,
+    totalOutliers: totalOutliers,
+    totalSKUs: totalSKUs
+  };
+}
+
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- UI JAVASCRIPT                                                -->
+  <!-- ============================================================ -->
+  <script>
+    // ============ APP STATE ============
+    const AppState = {
+      currentView: 'upload',
+      parsedData: null,       // {skus, metadata} from parseSalesData()
+      batchResults: null,     // array from runBatchForecast()
+      filteredResults: null,
+      currentSKU: null,       // currently selected skuResult
+      overrides: {},          // {skuKey: {monthLabel: value}}
+      sortColumn: null,
+      sortAsc: true,
+      chartInstance: null
+    };
+
+    // ============ VIEW MANAGEMENT ============
+    function showView(viewName) {
+      const views = ['upload', 'config', 'results', 'sku-detail'];
+      views.forEach(v => {
+        const el = document.getElementById('view-' + v);
+        if (el) {
+          el.classList.toggle('active', v === viewName);
+        }
+      });
+      AppState.currentView = viewName;
+
+      // Update nav label
+      const labelMap = { upload: 'Upload', config: 'Configuration', results: 'Results Dashboard', 'sku-detail': 'SKU Detail' };
+      const navLabel = document.getElementById('nav-view-label');
+      navLabel.textContent = labelMap[viewName] || viewName;
+      navLabel.classList.remove('hidden');
+
+      // Show/hide nav buttons based on state
+      document.getElementById('nav-btn-upload').classList.toggle('hidden', viewName === 'upload');
+      document.getElementById('nav-btn-config').classList.toggle('hidden', !AppState.parsedData || viewName === 'config');
+      document.getElementById('nav-btn-results').classList.toggle('hidden', !AppState.batchResults || viewName === 'results');
+
+      // Re-trigger fade-in
+      const section = document.getElementById('view-' + viewName);
+      if (section) {
+        section.querySelectorAll('.fade-in').forEach(el => {
+          el.style.animation = 'none';
+          el.offsetHeight; // reflow
+          el.style.animation = '';
+        });
+      }
+
+      // If returning to results, re-render to catch any override changes
+      if (viewName === 'results' && AppState.batchResults) {
+        filterResults();
+      }
+    }
+
+    // ============ UPLOAD HANDLING ============
+    (function initUpload() {
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
+
+      ['dragenter', 'dragover'].forEach(evt => {
+        dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drag-over'); });
+      });
+      ['dragleave', 'drop'].forEach(evt => {
+        dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag-over'); });
+      });
+      dropZone.addEventListener('drop', e => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0) handleFile(files[0]);
+      });
+      fileInput.addEventListener('change', e => {
+        if (e.target.files.length > 0) handleFile(e.target.files[0]);
+      });
+    })();
+
+    function handleFile(file) {
+      const validExts = ['.xlsx', '.xls', '.csv'];
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      if (!validExts.includes(ext)) {
+        showUploadError('Invalid file type. Please upload an .xlsx or .csv file.');
+        return;
+      }
+
+      document.getElementById('drop-zone-default').classList.add('hidden');
+      document.getElementById('drop-zone-loading').classList.remove('hidden');
+      document.getElementById('upload-result').classList.add('hidden');
+      document.getElementById('upload-error').classList.add('hidden');
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const result = parseSalesData(e.target.result, file.name);
+          AppState.parsedData = result;
+          renderUploadResult(result.metadata, file.name);
+        } catch (err) {
+          showUploadError(err.message || 'Failed to parse file. Check column names and data format.');
+        } finally {
+          document.getElementById('drop-zone-default').classList.remove('hidden');
+          document.getElementById('drop-zone-loading').classList.add('hidden');
+        }
+      };
+      reader.onerror = function() {
+        showUploadError('Failed to read file.');
+        document.getElementById('drop-zone-default').classList.remove('hidden');
+        document.getElementById('drop-zone-loading').classList.add('hidden');
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function renderUploadResult(metadata, filename) {
+      document.getElementById('upload-error').classList.add('hidden');
+      document.getElementById('upload-result').classList.remove('hidden');
+      document.getElementById('upload-filename').textContent = filename || '';
+      document.getElementById('stat-rows').textContent = (metadata.totalRows || metadata.rowCount || 0).toLocaleString();
+      document.getElementById('stat-customers').textContent = (metadata.customerCount || 0).toLocaleString();
+      document.getElementById('stat-products').textContent = (metadata.productCount || 0).toLocaleString();
+      const dr = metadata.dateRange;
+      document.getElementById('stat-daterange').textContent = dr && dr.start ? (dr.start + ' to ' + dr.end) : (dr || '--');
+
+      const q = metadata.dataQualityScore || metadata.qualityScore || 0;
+      const qEl = document.getElementById('stat-quality');
+      qEl.textContent = q + '%';
+      if (q >= 80) { qEl.className = 'text-xl font-bold tabular-nums text-green-400'; }
+      else if (q >= 60) { qEl.className = 'text-xl font-bold tabular-nums text-yellow-400'; }
+      else { qEl.className = 'text-xl font-bold tabular-nums text-red-400'; }
+    }
+
+    function showUploadError(msg) {
+      document.getElementById('upload-result').classList.add('hidden');
+      document.getElementById('upload-error').classList.remove('hidden');
+      document.getElementById('upload-error-msg').textContent = msg;
+    }
+
+    // ============ CONFIGURATION ============
+    function getConfig() {
+      const methods = [];
+      document.querySelectorAll('input[name="method"]:checked').forEach(cb => methods.push(cb.value));
+      return {
+        source: document.getElementById('cfg-data-source').value,
+        horizon: parseInt(document.getElementById('cfg-horizon').value, 10),
+        outlierHandling: document.querySelector('input[name="outlier-mode"]:checked')?.value || 'cap',
+        outlierSensitivity: parseFloat(document.getElementById('cfg-outlier-iqr').value),
+        recencyWeight: parseFloat(document.getElementById('cfg-recency').value),
+        methods: methods,
+        autoSelect: document.getElementById('cfg-auto-select').checked,
+        useEnsemble: document.getElementById('cfg-ensemble').checked,
+        seasonality: true
+      };
+    }
+
+    function renderConfigScreen() {
+      // Reset progress
+      document.getElementById('progress-section').classList.add('hidden');
+      document.getElementById('btn-run-batch').disabled = false;
+    }
+
+    // ============ BATCH RUN ============
+    async function handleRunBatch() {
+      if (!AppState.parsedData) { alert('No data loaded. Go back and upload a file.'); return; }
+
+      const config = getConfig();
+      if (config.methods.length === 0) { alert('Select at least one forecast method.'); return; }
+
+      const btn = document.getElementById('btn-run-batch');
+      btn.disabled = true;
+      document.getElementById('progress-section').classList.remove('hidden');
+      updateProgress(0, AppState.parsedData.skus.length);
+
+      try {
+        const batchOutput = await runBatchForecast(AppState.parsedData.skus, config, (current, total) => {
+          updateProgress(current, total);
+        });
+        // Flatten nested results into UI-friendly objects
+        const flatResults = (batchOutput.results || []).map(r => {
+          const acc = (r.selectedResult && r.selectedResult.accuracy) || {};
+          const wmapeVal = (acc.wmape != null && isFinite(acc.wmape)) ? Math.round(acc.wmape * 1000) / 10 : 999;
+          const biasVal = (acc.biasPercent != null && isFinite(acc.biasPercent)) ? Math.round(acc.biasPercent * 10) / 10 : 0;
+          return {
+            _raw: r,
+            customer: r.sku ? r.sku.customer : '',
+            product: r.sku ? r.sku.product : '',
+            productName: r.sku ? (r.sku.productName || r.sku.product) : '',
+            productNumber: r.sku ? r.sku.product : '',
+            brand: r.sku ? r.sku.brand : '',
+            type: r.sku ? r.sku.type : '',
+            formation: r.sku ? r.sku.formation : '',
+            method: r.bestMethod || 'flat',
+            wmape: wmapeVal,
+            bias: biasVal,
+            grade: (r.selectedResult && r.selectedResult.grade) || 'F',
+            trend: (r.characteristics && r.characteristics.trendDirection) || 'flat',
+            outlierCount: (r.outliers && r.outliers.outliers) ? r.outliers.outliers.length : 0,
+            forecastabilityScore: r.forecastabilityScore || 0
+          };
+        });
+        AppState.batchResults = flatResults;
+        AppState.batchSummary = batchOutput.summary;
+        AppState.overrides = {};
+        renderResultsDashboard(flatResults);
+        showView('results');
+      } catch (err) {
+        alert('Forecast failed: ' + (err.message || err));
+        btn.disabled = false;
+      }
+    }
+
+    function updateProgress(current, total) {
+      const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+      document.getElementById('progress-label').textContent = `Processing SKU ${current} of ${total}...`;
+      document.getElementById('progress-pct').textContent = pct + '%';
+      document.getElementById('progress-fill').style.width = pct + '%';
+    }
+
+    // ============ RESULTS DASHBOARD ============
+    function getGrade(wmape) {
+      if (wmape < 15) return 'A';
+      if (wmape < 30) return 'B';
+      if (wmape < 50) return 'C';
+      return 'F';
+    }
+
+    function getTrendArrow(trend) {
+      if (!trend) return '<span class="trend-flat">&#8594;</span>';
+      const t = String(trend).toLowerCase();
+      if (t === 'up' || t === 'increasing') return '<span class="trend-up">&#9650;</span>';
+      if (t === 'down' || t === 'decreasing') return '<span class="trend-down">&#9660;</span>';
+      return '<span class="trend-flat">&#8594;</span>';
+    }
+
+    function renderResultsDashboard(results) {
+      if (!results || results.length === 0) return;
+
+      // Summary
+      const total = results.length;
+      const avgWmape = results.reduce((s, r) => s + (r.wmape || 0), 0) / total;
+      const grades = { A: 0, B: 0, C: 0, F: 0 };
+      let totalOutliers = 0;
+      results.forEach(r => {
+        const g = r.grade || getGrade(r.wmape || 100);
+        r._grade = g;
+        grades[g] = (grades[g] || 0) + 1;
+        totalOutliers += (r.outlierCount || 0);
+      });
+
+      document.getElementById('res-total-skus').textContent = total.toLocaleString();
+      document.getElementById('res-avg-wmape').textContent = avgWmape.toFixed(1) + '%';
+      document.getElementById('res-outliers').textContent = totalOutliers.toLocaleString();
+
+      const gradeDist = document.getElementById('res-grade-dist');
+      gradeDist.innerHTML =
+        `<span class="grade-badge grade-A" title="A: <15%">${grades.A}</span>` +
+        `<span class="grade-badge grade-B" title="B: 15-30%">${grades.B}</span>` +
+        `<span class="grade-badge grade-C" title="C: 30-50%">${grades.C}</span>` +
+        `<span class="grade-badge grade-F" title="F: >50%">${grades.F}</span>`;
+
+      // Populate filter dropdowns
+      populateFilterDropdown('filter-customer', [...new Set(results.map(r => r.customer))].sort(), 'All Customers');
+      populateFilterDropdown('filter-brand', [...new Set(results.map(r => r.brand).filter(Boolean))].sort(), 'All Brands');
+      populateFilterDropdown('filter-type', [...new Set(results.map(r => r.type).filter(Boolean))].sort(), 'All Types');
+
+      AppState.filteredResults = results.slice();
+      AppState.sortColumn = 'wmape';
+      AppState.sortAsc = true;
+      sortAndRenderTable();
+    }
+
+    function populateFilterDropdown(id, values, defaultLabel) {
+      const sel = document.getElementById(id);
+      const current = sel.value;
+      sel.innerHTML = `<option value="">${defaultLabel}</option>`;
+      values.forEach(v => {
+        if (v) sel.innerHTML += `<option value="${escHtml(v)}">${escHtml(v)}</option>`;
+      });
+      sel.value = current;
+    }
+
+    function filterResults() {
+      if (!AppState.batchResults) return;
+      const cust = document.getElementById('filter-customer').value;
+      const brand = document.getElementById('filter-brand').value;
+      const type = document.getElementById('filter-type').value;
+      const grade = document.getElementById('filter-grade').value;
+      const search = document.getElementById('filter-search').value.toLowerCase().trim();
+
+      let filtered = AppState.batchResults.filter(r => {
+        if (cust && r.customer !== cust) return false;
+        if (brand && r.brand !== brand) return false;
+        if (type && r.type !== type) return false;
+        if (grade && (r._grade || getGrade(r.wmape || 100)) !== grade) return false;
+        if (search) {
+          const haystack = [r.customer, r.productName, r.productNumber, r.brand].join(' ').toLowerCase();
+          if (!haystack.includes(search)) return false;
+        }
+        return true;
+      });
+      AppState.filteredResults = filtered;
+      sortAndRenderTable();
+    }
+
+    function sortResultsTable(column) {
+      if (AppState.sortColumn === column) {
+        AppState.sortAsc = !AppState.sortAsc;
+      } else {
+        AppState.sortColumn = column;
+        AppState.sortAsc = true;
+      }
+      // Update header styles
+      document.querySelectorAll('.results-table thead th').forEach(th => th.classList.remove('sort-active'));
+      const cols = ['customer','product','brand','method','wmape','bias','grade'];
+      const idx = cols.indexOf(column);
+      if (idx >= 0) {
+        const th = document.querySelectorAll('.results-table thead th')[idx];
+        if (th) {
+          th.classList.add('sort-active');
+          th.querySelector('.sort-arrow').innerHTML = AppState.sortAsc ? '&#9650;' : '&#9660;';
+        }
+      }
+      sortAndRenderTable();
+    }
+
+    function sortAndRenderTable() {
+      const col = AppState.sortColumn;
+      const asc = AppState.sortAsc;
+      if (!AppState.filteredResults) return;
+
+      const keyMap = {
+        customer: r => (r.customer || '').toLowerCase(),
+        product: r => (r.productName || '').toLowerCase(),
+        brand: r => (r.brand || '').toLowerCase(),
+        method: r => (r.method || r.bestMethod || '').toLowerCase(),
+        wmape: r => r.wmape || 0,
+        bias: r => r.bias || 0,
+        grade: r => ({ A:0, B:1, C:2, F:3 }[r._grade || getGrade(r.wmape||100)] || 4)
+      };
+      const keyFn = keyMap[col] || keyMap['wmape'];
+      AppState.filteredResults.sort((a, b) => {
+        const va = keyFn(a), vb = keyFn(b);
+        if (va < vb) return asc ? -1 : 1;
+        if (va > vb) return asc ? 1 : -1;
+        return 0;
+      });
+
+      renderTableRows(AppState.filteredResults);
+      const totalCount = AppState.batchResults ? AppState.batchResults.length : 0;
+      document.getElementById('filter-count').textContent = `${AppState.filteredResults.length} of ${totalCount} SKUs`;
+    }
+
+    function renderTableRows(rows) {
+      const tbody = document.getElementById('results-tbody');
+      const emptyMsg = document.getElementById('results-empty');
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = '';
+        emptyMsg.classList.remove('hidden');
+        return;
+      }
+      emptyMsg.classList.add('hidden');
+
+      // Build HTML
+      let html = '';
+      rows.forEach((r, idx) => {
+        const g = r._grade || getGrade(r.wmape || 100);
+        html += `<tr onclick="handleSKUClick(${idx})">
+          <td class="text-slate-300">${escHtml(r.customer || '--')}</td>
+          <td class="text-white font-medium">${escHtml(r.productName || r.productNumber || '--')}</td>
+          <td class="text-slate-400">${escHtml(r.brand || '--')}</td>
+          <td class="text-slate-400 text-sm">${escHtml((typeof methodNameMap !== 'undefined' && methodNameMap[r.method]) || r.method || '--')}</td>
+          <td class="text-right tabular-nums font-medium">${(r.wmape != null) ? r.wmape.toFixed(1) : '--'}</td>
+          <td class="text-right tabular-nums ${(r.bias||0) > 0 ? 'text-yellow-400' : (r.bias||0) < 0 ? 'text-blue-400' : 'text-slate-400'}">${(r.bias != null) ? (r.bias > 0 ? '+' : '') + r.bias.toFixed(1) : '--'}</td>
+          <td><span class="grade-badge grade-${g}">${g}</span></td>
+          <td class="text-center">${getTrendArrow(r.trend)}</td>
+        </tr>`;
+      });
+      tbody.innerHTML = html;
+    }
+
+    function handleSKUClick(filteredIndex) {
+      const r = AppState.filteredResults[filteredIndex];
+      if (!r) return;
+      AppState.currentSKU = r;
+      renderSKUDetail(r);
+      showView('sku-detail');
+    }
+
+    // ============ SKU DETAIL VIEW ============
+    function buildSKUMonths(flatResult) {
+      // Build the unified months array from raw data for charts/grids
+      const raw = flatResult._raw;
+      if (!raw) return [];
+      const sku = raw.sku || {};
+      const skuMonths = sku.months || [];
+      const forecasts = (raw.selectedResult && raw.selectedResult.forecasts) || [];
+      const cleanedSeries = raw.cleanedSeries || [];
+      const outlierList = (raw.outliers && raw.outliers.outliers) || [];
+      const outlierMonths = new Set(outlierList.map(o => o.month));
+
+      const monthMap = new Map();
+
+      // Add historical data
+      skuMonths.forEach(m => {
+        const config = getConfig();
+        const src = config.source || 'invoice';
+        let actual = null;
+        if (src === 'pos') actual = m.pos;
+        else if (src === 'invoice') actual = m.invoice;
+        else if (src === 'order') actual = m.order;
+        else if (src === 'blended') {
+          const vals = [m.pos, m.invoice, m.order].filter(v => v != null);
+          actual = vals.length > 0 ? vals.reduce((a,b) => a+b, 0) / vals.length : null;
+        }
+        monthMap.set(m.month, {
+          label: m.month,
+          actual: actual,
+          existingForecast: m.existingForecast || null,
+          statForecast: null,
+          lowerCI: null,
+          upperCI: null,
+          isFuture: false,
+          isOutlier: outlierMonths.has(m.month)
+        });
+      });
+
+      // Add forecast data
+      forecasts.forEach(f => {
+        const existing = monthMap.get(f.month);
+        if (existing) {
+          existing.statForecast = f.value;
+          existing.lowerCI = f.lower != null ? f.lower : null;
+          existing.upperCI = f.upper != null ? f.upper : null;
+        } else {
+          monthMap.set(f.month, {
+            label: f.month,
+            actual: null,
+            existingForecast: null,
+            statForecast: f.value,
+            lowerCI: f.lower != null ? f.lower : null,
+            upperCI: f.upper != null ? f.upper : null,
+            isFuture: true,
+            isOutlier: false
+          });
+        }
+      });
+
+      return [...monthMap.values()].sort((a, b) => a.label.localeCompare(b.label));
+    }
+
+    function buildMethodComparison(flatResult) {
+      const raw = flatResult._raw;
+      if (!raw || !raw.methodResults) return [];
+      const methods = [];
+      const names = typeof methodNameMap !== 'undefined' ? methodNameMap : {};
+      Object.keys(raw.methodResults).forEach(key => {
+        const mr = raw.methodResults[key];
+        if (!mr) return;
+        const acc = mr.accuracy || {};
+        methods.push({
+          name: names[key] || key,
+          key: key,
+          wmape: acc.wmape != null && isFinite(acc.wmape) ? Math.round(acc.wmape * 1000) / 10 : null,
+          bias: acc.biasPercent != null && isFinite(acc.biasPercent) ? Math.round(acc.biasPercent * 10) / 10 : null,
+          mae: acc.mae != null && isFinite(acc.mae) ? Math.round(acc.mae * 10) / 10 : null,
+          grade: mr.grade || 'F'
+        });
+      });
+      return methods;
+    }
+
+    function renderSKUDetail(skuResult) {
+      if (!skuResult) return;
+      const r = skuResult;
+      document.getElementById('sku-customer').textContent = r.customer || '--';
+      document.getElementById('sku-product').textContent = r.productName || '--';
+      document.getElementById('sku-productnumber').textContent = r.productNumber || '--';
+      document.getElementById('sku-brand').textContent = r.brand || '--';
+      document.getElementById('sku-type').textContent = r.type || '--';
+      document.getElementById('sku-formation').textContent = r.formation || '--';
+
+      const g = r.grade || getGrade(r.wmape || 100);
+      const badge = document.getElementById('sku-grade-badge');
+      badge.textContent = g + ' (' + (r.wmape != null ? r.wmape.toFixed(1) + '%' : '--') + ')';
+      badge.className = `grade-badge grade-${g}`;
+      badge.style.width = 'auto';
+      badge.style.padding = '0.25rem 0.75rem';
+      badge.style.height = 'auto';
+
+      // Build derived data from raw
+      r.months = buildSKUMonths(r);
+      r.methodResults = buildMethodComparison(r);
+
+      renderMethodComparison(r);
+      renderForecastGrid(r);
+      // Delay chart slightly to ensure canvas is visible
+      setTimeout(() => renderForecastChart(r), 50);
+    }
+
+    function renderMethodComparison(skuResult) {
+      const container = document.getElementById('method-comparison-container');
+      const methods = skuResult.methodResults || [];
+      if (methods.length === 0) {
+        container.innerHTML = '<p class="text-sm text-slate-500">No method data available.</p>';
+        return;
+      }
+      let html = `<table class="w-full text-sm border-collapse">
+        <thead><tr>
+          <th class="text-left text-xs text-slate-500 font-semibold pb-2 pr-3">Method</th>
+          <th class="text-right text-xs text-slate-500 font-semibold pb-2 px-2">WMAPE</th>
+          <th class="text-right text-xs text-slate-500 font-semibold pb-2 px-2">Bias%</th>
+          <th class="text-right text-xs text-slate-500 font-semibold pb-2 pl-2">MAE</th>
+        </tr></thead><tbody>`;
+      methods.forEach(m => {
+        const isBest = m.key === skuResult.method || m.name === skuResult.method;
+        const rowCls = isBest ? 'bg-blue-600/10 font-semibold' : '';
+        html += `<tr class="${rowCls}">
+          <td class="py-1.5 pr-3 text-slate-300 ${isBest ? 'text-blue-400' : ''}">${escHtml(m.name)}${isBest ? ' *' : ''}</td>
+          <td class="py-1.5 px-2 text-right tabular-nums text-slate-300">${m.wmape != null ? m.wmape.toFixed(1) : '--'}</td>
+          <td class="py-1.5 px-2 text-right tabular-nums text-slate-400">${m.bias != null ? m.bias.toFixed(1) : '--'}</td>
+          <td class="py-1.5 pl-2 text-right tabular-nums text-slate-400">${m.mae != null ? m.mae.toFixed(1) : '--'}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      if (skuResult.bestMethod) {
+        html += `<p class="text-xs text-blue-400 mt-2">* Selected method</p>`;
+      }
+      container.innerHTML = html;
+    }
+
+    function renderForecastGrid(skuResult) {
+      const container = document.getElementById('forecast-grid-container');
+      const months = skuResult.months || [];
+      if (months.length === 0) {
+        container.innerHTML = '<p class="text-sm text-slate-500">No forecast data available.</p>';
+        return;
+      }
+
+      const skuKey = skuResult.customer + '|' + skuResult.productNumber;
+      if (!AppState.overrides[skuKey]) AppState.overrides[skuKey] = {};
+      const ov = AppState.overrides[skuKey];
+
+      let html = `<table class="forecast-grid">
+        <thead><tr>
+          <th class="text-left">Month</th>
+          <th>Actual</th>
+          <th>Exist. Fcst</th>
+          <th>Stat Fcst</th>
+          <th>Lower CI</th>
+          <th>Upper CI</th>
+          <th>Override</th>
+          <th>Final</th>
+        </tr></thead><tbody>`;
+      months.forEach(m => {
+        const isFuture = m.isFuture;
+        const rowClass = isFuture ? 'future-row' : '';
+        const overrideVal = ov[m.label] != null ? ov[m.label] : '';
+        const stat = m.statForecast != null ? m.statForecast : null;
+        const final_ = overrideVal !== '' ? parseFloat(overrideVal) : stat;
+
+        html += `<tr class="${rowClass}">
+          <td>${escHtml(m.label)}</td>
+          <td class="tabular-nums">${m.actual != null ? formatNum(m.actual) : '<span class="text-slate-600">--</span>'}</td>
+          <td class="tabular-nums text-slate-400">${m.existingForecast != null ? formatNum(m.existingForecast) : '<span class="text-slate-600">--</span>'}</td>
+          <td class="tabular-nums text-purple-400 font-medium">${stat != null ? formatNum(stat) : '<span class="text-slate-600">--</span>'}</td>
+          <td class="tabular-nums text-slate-500">${m.lowerCI != null ? formatNum(m.lowerCI) : '<span class="text-slate-600">--</span>'}</td>
+          <td class="tabular-nums text-slate-500">${m.upperCI != null ? formatNum(m.upperCI) : '<span class="text-slate-600">--</span>'}</td>
+          <td>${isFuture ? `<input class="override-input tabular-nums" type="number" step="any" value="${overrideVal}" onchange="setOverride('${escAttr(m.label)}', this.value)" />` : '<span class="text-slate-700">--</span>'}</td>
+          <td class="tabular-nums font-medium ${overrideVal !== '' ? 'text-amber-400' : 'text-slate-200'}">${final_ != null ? formatNum(final_) : '--'}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function renderForecastChart(skuResult) {
+      const ctx = document.getElementById('sku-chart');
+      if (!ctx) return;
+
+      // Destroy existing chart
+      if (AppState.chartInstance) {
+        AppState.chartInstance.destroy();
+        AppState.chartInstance = null;
+      }
+
+      const months = skuResult.months || [];
+      if (months.length === 0) return;
+
+      const labels = months.map(m => m.label);
+      const actuals = months.map(m => m.actual != null ? m.actual : null);
+      const existing = months.map(m => m.existingForecast != null ? m.existingForecast : null);
+      const statFcst = months.map(m => m.statForecast != null ? m.statForecast : null);
+      const lowerCI = months.map(m => m.lowerCI != null ? m.lowerCI : null);
+      const upperCI = months.map(m => m.upperCI != null ? m.upperCI : null);
+
+      // Outlier points
+      const outlierData = months.map(m => m.isOutlier ? m.actual : null);
+
+      const datasets = [
+        {
+          label: 'Upper CI',
+          data: upperCI,
+          borderColor: 'transparent',
+          backgroundColor: 'rgba(139, 92, 246, 0.08)',
+          fill: '+1',
+          pointRadius: 0,
+          tension: 0.3,
+          order: 5
+        },
+        {
+          label: 'Lower CI',
+          data: lowerCI,
+          borderColor: 'transparent',
+          backgroundColor: 'rgba(139, 92, 246, 0.08)',
+          fill: false,
+          pointRadius: 0,
+          tension: 0.3,
+          order: 5
+        },
+        {
+          label: 'Actuals',
+          data: actuals,
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderWidth: 2.5,
+          pointRadius: 3,
+          pointBackgroundColor: '#3b82f6',
+          tension: 0.2,
+          fill: false,
+          order: 2
+        },
+        {
+          label: 'Existing Forecast',
+          data: existing,
+          borderColor: '#f97316',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          tension: 0.2,
+          fill: false,
+          order: 3
+        },
+        {
+          label: 'Stat Forecast',
+          data: statFcst,
+          borderColor: '#8b5cf6',
+          backgroundColor: 'rgba(139, 92, 246, 0.05)',
+          borderWidth: 2.5,
+          pointRadius: 2,
+          pointBackgroundColor: '#8b5cf6',
+          tension: 0.2,
+          fill: false,
+          order: 1
+        },
+        {
+          label: 'Outliers',
+          data: outlierData,
+          borderColor: 'transparent',
+          backgroundColor: '#ef4444',
+          pointRadius: 7,
+          pointStyle: 'circle',
+          pointBorderColor: '#ef4444',
+          pointBorderWidth: 2,
+          pointBackgroundColor: 'rgba(239, 68, 68, 0.3)',
+          showLine: false,
+          order: 0
+        }
+      ];
+
+      AppState.chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#1e293b',
+              titleColor: '#e2e8f0',
+              bodyColor: '#94a3b8',
+              borderColor: '#334155',
+              borderWidth: 1,
+              cornerRadius: 8,
+              padding: 10,
+              callbacks: {
+                label: function(ctx) {
+                  if (ctx.raw == null) return null;
+                  return ctx.dataset.label + ': ' + formatNum(ctx.raw);
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#64748b', font: { size: 11 }, maxRotation: 45 },
+              grid: { color: 'rgba(51,65,85,0.3)' }
+            },
+            y: {
+              ticks: {
+                color: '#64748b', font: { size: 11 },
+                callback: v => formatNum(v)
+              },
+              grid: { color: 'rgba(51,65,85,0.3)' },
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    // ============ OVERRIDE MANAGEMENT ============
+    function setOverride(monthLabel, value) {
+      if (!AppState.currentSKU) return;
+      const skuKey = AppState.currentSKU.customer + '|' + AppState.currentSKU.productNumber;
+      if (!AppState.overrides[skuKey]) AppState.overrides[skuKey] = {};
+
+      if (value === '' || value == null) {
+        delete AppState.overrides[skuKey][monthLabel];
+      } else {
+        AppState.overrides[skuKey][monthLabel] = parseFloat(value);
+      }
+      // Re-render grid to update Final column
+      renderForecastGrid(AppState.currentSKU);
+    }
+
+    function clearOverrides() {
+      if (!AppState.currentSKU) return;
+      const skuKey = AppState.currentSKU.customer + '|' + AppState.currentSKU.productNumber;
+      AppState.overrides[skuKey] = {};
+      renderForecastGrid(AppState.currentSKU);
+    }
+
+    // ============ EXPORT STUBS ============
+    function exportAllForecasts() {
+      if (!AppState.batchResults) { alert('No results to export.'); return; }
+      const config = getConfig();
+      const rawResults = AppState.batchResults.map(r => r._raw).filter(Boolean);
+      try {
+        exportBatchToExcel(rawResults, config);
+      } catch (e) {
+        alert('Export failed: ' + (e.message || e));
+      }
+    }
+
+    function exportAccuracyReport() {
+      if (!AppState.batchResults) { alert('No results to export.'); return; }
+      const rawResults = AppState.batchResults.map(r => r._raw).filter(Boolean);
+      try {
+        exportAccuracyToExcel(rawResults);
+      } catch (e) {
+        alert('Export failed: ' + (e.message || e));
+      }
+    }
+
+    function exportSKU() {
+      if (!AppState.currentSKU) { alert('No SKU selected.'); return; }
+      try {
+        exportSKUToExcel(AppState.currentSKU._raw || AppState.currentSKU);
+      } catch (e) {
+        alert('Export failed: ' + (e.message || e));
+      }
+    }
+
+    // ============ HELPERS ============
+    function escHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function escAttr(str) {
+      return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+
+    function formatNum(n) {
+      if (n == null) return '--';
+      const val = parseFloat(n);
+      if (isNaN(val)) return '--';
+      if (Math.abs(val) >= 1000) return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
+      if (Number.isInteger(val)) return val.toLocaleString();
+      return val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    }
+
+    // ============ INIT ============
+    showView('upload');
+  </script>
+</body>
+</html>
