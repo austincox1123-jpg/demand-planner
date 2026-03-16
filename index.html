@@ -691,22 +691,43 @@ function endOfMonth(year, month) {
   return d.getUTCFullYear() + '-' + mm + '-' + dd;
 }
 
-/** Parse a value into a date {y,m} or null. Handles Excel serial numbers, ISO strings, etc. */
+/** Parse a value into a date {y,m} or null. Handles Excel serial numbers, Unix epoch, ISO strings, etc. */
 function parseDateValue(raw) {
   if (raw == null || raw === '') return null;
-
-  // Excel serial number (numeric)
-  if (typeof raw === 'number' || (typeof raw === 'string' && /^\d+(\.\d+)?$/.test(raw.trim()))) {
-    var num = typeof raw === 'number' ? raw : parseFloat(raw.trim());
-    if (num > 1 && num < 200000) {
-      var parsed = XLSX.SSF.parse_date_code(num);
-      if (parsed && parsed.y) return { y: parsed.y, m: parsed.m };
-    }
-  }
 
   // JS Date object from SheetJS
   if (raw instanceof Date) {
     return { y: raw.getFullYear(), m: raw.getMonth() + 1 };
+  }
+
+  // Numeric value: could be Excel serial, Unix seconds, or Unix milliseconds
+  if (typeof raw === 'number' || (typeof raw === 'string' && /^\d+(\.\d+)?$/.test(String(raw).trim()))) {
+    var num = typeof raw === 'number' ? raw : parseFloat(String(raw).trim());
+    if (isNaN(num) || num <= 0) return null;
+
+    // Excel serial number range: 1 to ~2958465 (year 9999). Realistic dates: 1 to 200000
+    if (num >= 1 && num < 200000) {
+      try {
+        var parsed = XLSX.SSF.parse_date_code(num);
+        if (parsed && parsed.y > 1900 && parsed.y < 2100) return { y: parsed.y, m: parsed.m };
+      } catch(_) {}
+    }
+
+    // Unix epoch in seconds (roughly 1970-2100): 86400 to 4102444800
+    if (num >= 86400 && num < 4200000000) {
+      var d = new Date(num * 1000);
+      if (!isNaN(d.getTime()) && d.getFullYear() > 1970 && d.getFullYear() < 2100) {
+        return { y: d.getFullYear(), m: d.getMonth() + 1 };
+      }
+    }
+
+    // Unix epoch in milliseconds
+    if (num >= 86400000 && num < 4200000000000) {
+      var d2 = new Date(num);
+      if (!isNaN(d2.getTime()) && d2.getFullYear() > 1970 && d2.getFullYear() < 2100) {
+        return { y: d2.getFullYear(), m: d2.getMonth() + 1 };
+      }
+    }
   }
 
   // String date: try common formats
@@ -717,6 +738,20 @@ function parseDateValue(raw) {
   // US: 01/31/2024 or 1/31/2024
   var usMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (usMatch) return { y: parseInt(usMatch[3]), m: parseInt(usMatch[1]) };
+  // EU: 31/01/2024 or 31.01.2024
+  var euMatch = s.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/);
+  if (euMatch) {
+    var day = parseInt(euMatch[1]), mon = parseInt(euMatch[2]), yr = parseInt(euMatch[3]);
+    if (day > 12 && mon <= 12) return { y: yr, m: mon };
+  }
+
+  // Last resort: try JS Date constructor
+  try {
+    var fallback = new Date(s);
+    if (!isNaN(fallback.getTime()) && fallback.getFullYear() > 1900 && fallback.getFullYear() < 2100) {
+      return { y: fallback.getFullYear(), m: fallback.getMonth() + 1 };
+    }
+  } catch(_) {}
 
   return null;
 }
@@ -1521,13 +1556,7 @@ function clampNonNeg(v) {
   return v < 0 ? 0 : v;
 }
 
-function endOfMonth(year, month) {
-  // month is 1-based
-  var lastDay = new Date(year, month, 0).getDate();
-  var mm = month < 10 ? '0' + month : '' + month;
-  var dd = lastDay < 10 ? '0' + lastDay : '' + lastDay;
-  return year + '-' + mm + '-' + dd;
-}
+// endOfMonth is already defined in data-pipeline
 
 // --- Seasonal helpers ---
 
@@ -3637,7 +3666,13 @@ function _buildBatchSummary(results) {
       const reader = new FileReader();
       reader.onload = function(e) {
         try {
-          const result = parseSalesData(e.target.result, file.name);
+          const result = parseSalesData(e.target.result);
+          if (!result.success) {
+            showUploadError((result.errors || []).join('; ') || 'Failed to parse file.');
+            document.getElementById('drop-zone-default').classList.remove('hidden');
+            document.getElementById('drop-zone-loading').classList.add('hidden');
+            return;
+          }
           AppState.parsedData = result;
           renderUploadResult(result.metadata, file.name);
         } catch (err) {
